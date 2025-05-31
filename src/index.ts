@@ -10,7 +10,7 @@ import userRoutes from "./routes/user";
 import companyRoutes from "./routes/companies";
 import billRoutes from "./routes/bills";
 import gstRoutes from "./routes/gst";
-
+import defaultRoute from "./routes/api";
 import billsRoutes from "./routes/bills";
 import customersRoutes from "./routes/customers";
 import paymentRoutes from "./routes/payments";
@@ -28,7 +28,7 @@ fastify.register(gstRoutes, { prefix: "/api/gst" });
 fastify.register(paymentRoutes, { prefix: "/api/payments" });
 fastify.register(billsRoutes, { prefix: "/api/bills" });
 fastify.register(customersRoutes, { prefix: "/api/customers" });
-
+fastify.register(defaultRoute,{ prefix: "/api" });
 fastify.listen({ port: 4000, host: "0.0.0.0" }, (err, address) => {
     if (err) throw err;
     fastify.log.info(`Server running at ${address}`);
