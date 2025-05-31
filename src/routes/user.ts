@@ -20,19 +20,19 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // List all users (admin only)
-    fastify.get("/", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (_req: FastifyRequest) => {
+    fastify.get("/", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (_req: FastifyRequest) => {
         return db.select().from(users);
     });
 
-    // Get user by id (admin only)
-    fastify.get("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (req: FastifyRequest) => {
+    // Get user by id (ADMIN only)
+    fastify.get("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (req: FastifyRequest) => {
         const { id } = req.params as { id: string };
         const [user] = await db.select().from(users).where(eq(users.id, Number(id)));
         return user;
     });
 
-    // Delete user (admin only)
-    fastify.delete("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (req: FastifyRequest) => {
+    // Delete user (ADMIN only)
+    fastify.delete("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (req: FastifyRequest) => {
         const { id } = req.params as { id: string };
         await db.delete(users).where(eq(users.id, Number(id)));
         return { success: true };
