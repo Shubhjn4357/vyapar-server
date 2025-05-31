@@ -23,7 +23,6 @@ fastify.register(roleGuard)
 fastify.register(authRoutes, { prefix: "/api/auth" });
 fastify.register(userRoutes, { prefix: "/api/user" });
 fastify.register(companyRoutes, { prefix: "/api/company" });
-fastify.register(billRoutes, { prefix: "/api/bills" });
 fastify.register(gstRoutes, { prefix: "/api/gst" });
 fastify.register(paymentRoutes, { prefix: "/api/payments" });
 fastify.register(billsRoutes, { prefix: "/api/bills" });

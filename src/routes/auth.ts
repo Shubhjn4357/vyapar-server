@@ -76,7 +76,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // New endpoint for OTP request
-    fastify.post("/auth/otp/request", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/otp/request", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ mobile: z.string().min(10) });
         const { mobile } = schema.parse(req.body);
 
@@ -88,7 +88,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // New endpoint for OTP verification
-    fastify.post("/auth/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({
             mobile: z.string().min(10),
             otp: z.string().length(6)
@@ -121,7 +121,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // Add Facebook authentication
-    fastify.post("/auth/facebook", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/facebook", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ accessToken: z.string() });
         const { accessToken } = schema.parse(req.body);
 
@@ -152,7 +152,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // Add refresh token endpoint
-    fastify.post("/auth/refresh", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/refresh", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ token: z.string() });
         const { token } = schema.parse(req.body);
 
