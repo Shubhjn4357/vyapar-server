@@ -1,0 +1,22 @@
+vyapar-server/
+  src/
+    db/
+      schema.ts
+      drizzle.ts
+    plugins/
+      auth.ts
+    routes/
+      auth.ts
+      user.ts
+      company.ts
+      bill.ts
+      accounting.ts
+      gst.ts
+      ai.ts
+    utils/
+      jwt.ts
+      validation.ts
+    index.ts
+  package.json
+  tsconfig.json
+  .env
