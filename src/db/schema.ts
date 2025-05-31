@@ -1,4 +1,5 @@
 import { pgTable, serial, varchar, jsonb, timestamp, pgEnum, uuid, boolean, numeric, text } from "drizzle-orm/pg-core";
+import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
 
 // Role enum (use lowercase for consistency)
 export const RoleEnum = pgEnum("role_enum", [
@@ -142,22 +143,53 @@ export const aiInsights = pgTable('ai_insights', {
     updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Zod schemas for all tables
+export const insertUserSchema = createInsertSchema(users);
+export const selectUserSchema = createSelectSchema(users);
+
+export const insertCompanySchema = createInsertSchema(companies);
+export const selectCompanySchema = createSelectSchema(companies);
+
+export const insertBillSchema = createInsertSchema(bills);
+export const selectBillSchema = createSelectSchema(bills);
+
+export const insertPaymentSchema = createInsertSchema(payments);
+export const selectPaymentSchema = createSelectSchema(payments);
+
+export const insertAccountSchema = createInsertSchema(accounts);
+export const selectAccountSchema = createSelectSchema(accounts);
+
+export const insertOtpSchema = createInsertSchema(otps);
+export const selectOtpSchema = createSelectSchema(otps);
+
+export const insertCustomerSchema = createInsertSchema(customers);
+export const selectCustomerSchema = createSelectSchema(customers);
+
+export const insertGstTransactionSchema = createInsertSchema(gstTransactions);
+export const selectGstTransactionSchema = createSelectSchema(gstTransactions);
+
+export const insertAiInsightSchema = createInsertSchema(aiInsights);
+export const selectAiInsightSchema = createSelectSchema(aiInsights);
+
 // Export types for all tables
-export type InsertCompanies = typeof companies.$inferInsert;
-export type SelectCompanies = typeof companies.$inferSelect;
 export type InsertUsers = typeof users.$inferInsert;
 export type SelectUsers = typeof users.$inferSelect;
+export type InsertCompanies = typeof companies.$inferInsert;
+export type SelectCompanies = typeof companies.$inferSelect;
 export type InsertBills = typeof bills.$inferInsert;
 export type SelectBills = typeof bills.$inferSelect;
 export type InsertPayments = typeof payments.$inferInsert;
 export type SelectPayments = typeof payments.$inferSelect;
+export type InsertAccounts = typeof accounts.$inferInsert;
 export type SelectAccounts = typeof accounts.$inferSelect;
+export type InsertOTP = typeof otps.$inferInsert;
+export type SelectOTP = typeof otps.$inferSelect;
+export type InsertCustomer = typeof customers.$inferInsert;
+export type InsertGSTTransaction = typeof gstTransactions.$inferInsert;
+export type SelectGSTTransaction = typeof gstTransactions.$inferSelect;
+export type InsertAIInsight = typeof aiInsights.$inferInsert;
+export type SelectAIInsight = typeof aiInsights.$inferSelect;
 export type RoleEnumType = typeof RoleEnum.enumValues[number];
 export type SelectBill = typeof bills.$inferSelect;
 export type SelectCompany = typeof companies.$inferSelect;
-export type SelectCustomer = typeof customers.$inferSelect;
 export type SelectPayment = typeof payments.$inferSelect;
-export type SelectGSTTransaction = typeof gstTransactions.$inferSelect;
-export type SelectAIInsight = typeof aiInsights.$inferSelect;
-export type InsertOTP = typeof otps.$inferInsert;
-export type SelectOTP = typeof otps.$inferSelect;

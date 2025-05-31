@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest } from "fastify";
 import { eq } from "drizzle-orm";
 import { db } from "../db/drizzle";
-import { users, SelectUsers } from "../db/schema";
+import { users, selectUserSchema } from '../db/schema';
 
 export default async function (fastify: FastifyInstance) {
     // Get current user profile
@@ -14,7 +14,7 @@ export default async function (fastify: FastifyInstance) {
     // Update current user profile
     fastify.put("/me", { preHandler: [fastify.authenticate] }, async (req: FastifyRequest) => {
         const userId = (req.user as { id: number }).id;
-        const update = req.body as Partial<SelectUsers>;
+        const update = selectUserSchema.partial().parse(req.body);
         const [user] = await db.update(users).set(update).where(eq(users.id, userId)).returning();
         return user;
     });

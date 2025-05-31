@@ -1,26 +1,8 @@
 import { FastifyInstance, FastifyRequest } from "fastify";
 import { db } from "../db/drizzle";
-import { gstTransactions } from "../db/schema";
+import { gstTransactions, insertGstTransactionSchema, selectGstTransactionSchema } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-
-const GSTTransactionSchema = z.object({
-    companyId: z.string(),
-    billId: z.string().optional(),
-    type: z.enum(['sales', 'purchase']),
-    date: z.string().or(z.date()),
-    partyName: z.string().optional(),
-    partyGstin: z.string().optional(),
-    taxableAmount: z.number(),
-    totalTax: z.number(),
-    cgst: z.number().optional(),
-    sgst: z.number().optional(),
-    igst: z.number().optional(),
-    total: z.number(),
-    items: z.any().optional(),
-    placeOfSupply: z.string().optional(),
-    reverseCharge: z.boolean().optional(),
-});
 
 export default async function (fastify: FastifyInstance) {
     // GSTR1
@@ -67,7 +49,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Create GST transaction
     fastify.post("/gst-transactions", { preHandler: [fastify.authenticate] }, async (req, reply) => {
-        const data = GSTTransactionSchema.parse(req.body);
+        const data = insertGstTransactionSchema.parse(req.body);
         const inserted = await db.insert(gstTransactions).values(data).returning().then(r => r[0]);
         return inserted;
     });
@@ -90,7 +72,7 @@ export default async function (fastify: FastifyInstance) {
     // Update GST transaction
     fastify.put("/gst-transactions/:id", { preHandler: [fastify.authenticate] }, async (req) => {
         const { id } = req.params as { id: string };
-        const data = GSTTransactionSchema.partial().parse(req.body);
+        const data = selectGstTransactionSchema.partial().parse(req.body);
         const updated = await db.update(gstTransactions).set(data).where(eq(gstTransactions.id, id)).returning().then(r => r[0]);
         return updated;
     });

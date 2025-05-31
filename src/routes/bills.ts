@@ -1,33 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/drizzle";
-import { bills } from "../db/schema";
+import { bills, insertBillSchema, selectBillSchema } from '../db/schema';
 import { eq } from "drizzle-orm";
-import { z } from "zod";
-
-const BillItemSchema = z.object({
-    name: z.string(),
-    quantity: z.number(),
-    price: z.number(),
-    total: z.number(),
-    gstRate: z.number().optional(),
-    hsnCode: z.string().optional(),
-});
-
-const BillSchema = z.object({
-    customerId: z.string(),
-    customerName: z.string(),
-    amount: z.number(),
-    date: z.string().or(z.date()),
-    items: z.array(BillItemSchema),
-    status: z.enum(['paid', 'unpaid', 'partial']),
-    dueDate: z.string().or(z.date()),
-    notes: z.string().optional(),
-});
-
 export default async function (fastify: FastifyInstance) {
     // Create bill
     fastify.post("/bills", { preHandler: [fastify.authenticate] }, async (req, reply) => {
-        const data = BillSchema.parse(req.body);
+        const data = insertBillSchema.parse(req.body);
         const inserted = await db.insert(bills).values(data).returning().then(r => r[0]);
         return inserted;
     });
@@ -46,7 +24,7 @@ export default async function (fastify: FastifyInstance) {
     // Update bill
     fastify.put("/bills/:id", { preHandler: [fastify.authenticate] }, async (req) => {
         const { id } = req.params as { id: string };
-        const data = BillSchema.partial().omit(id).parse(req.body);
+        const data = selectBillSchema.partial().parse(req.body);
         const updated = await db.update(bills).set(data).where(eq(bills.id, id)).returning().then(r => r[0]);
         return updated;
     });

@@ -13,6 +13,7 @@
         "bcryptjs": "^3.0.2",
         "dotenv": "^16.5.0",
         "drizzle-orm": "^0.43.1",
+        "drizzle-zod": "^0.8.2",
         "fastify": "^5.3.3",
         "fastify-cors": "^6.0.3",
         "fastify-jwt": "^4.1.3",

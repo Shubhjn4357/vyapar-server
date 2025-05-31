@@ -1,23 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/drizzle";
-import { customers } from "../db/schema";
+import { customers, insertCustomerSchema, selectCustomerSchema } from "../db/schema";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 
-const CustomerSchema = z.object({
-    companyId: z.string(),
-    name: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-    address: z.any().optional(),
-    gstin: z.string().optional(),
-    balance: z.number().optional(),
-});
 
 export default async function (fastify: FastifyInstance) {
     // Create customer
     fastify.post("/customers", { preHandler: [fastify.authenticate] }, async (req, reply) => {
-        const data = CustomerSchema.parse(req.body);
+        const data = insertCustomerSchema.parse(req.body);
         const inserted = await db.insert(customers).values(data).returning().then(r => r[0]);
         return inserted;
     });
@@ -40,7 +30,7 @@ export default async function (fastify: FastifyInstance) {
     // Update customer
     fastify.put("/customers/:id", { preHandler: [fastify.authenticate] }, async (req) => {
         const { id } = req.params as { id: string };
-        const data = CustomerSchema.partial().parse(req.body);
+        const data = selectCustomerSchema.partial().parse(req.body);
         const updated = await db.update(customers).set(data).where(eq(customers.id, id)).returning().then(r => r[0]);
         return updated;
     });
