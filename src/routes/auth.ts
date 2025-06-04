@@ -2,7 +2,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { db } from "../db/drizzle";
 import { users } from '../db/schema';
 import { signJwt, verifyToken } from "../utils/jwt";
-import type { JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -10,7 +9,7 @@ import { generateOTP, verifyOTP } from "../utils/otp";
 import { verifyFacebookToken } from "../utils/socialAuth";
 
 export default async function (fastify: FastifyInstance) {
-    fastify.post("/register", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/register", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({
             mobile: z.string().min(10),
             email: z.string().email().optional(),
@@ -39,7 +38,7 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user });
     });
 
-    fastify.post("/login", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/login", async (req: FastifyRequest, reply: FastifyReply) => {
         const { mobile, password } = req.body as { mobile: string; password: string };
         const [user] = await db.select().from(users).where(eq(users.mobile, mobile));
         if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
@@ -49,7 +48,7 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user });
     });
 
-    fastify.post("/google", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/google", async (req: FastifyRequest, reply: FastifyReply) => {
         const { googleId, email, name, phone } = req.body as { googleId: string; email: string; name?: string, phone?: string };
         let [user] = await db.select().from(users).where(eq(users.googleId, googleId));
         if (!user) {
@@ -59,24 +58,19 @@ export default async function (fastify: FastifyInstance) {
                 expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
             };
             [user] = await db.insert(users).values({
-                mobile: phone ?? "", // Ensure mobile is a string, not undefined
+                mobile: phone ?? "",
                 name,
                 role: "USER",
                 subscription,
                 companies: [],
-                email, // Only include if 'email' is a valid column in your users schema
+                email,
             }).returning();
         }
         const token = signJwt({ id: user.id, role: user.role });
         reply.send({ token, user });
     });
 
-    fastify.post("/otp", async (req: FastifyRequest, reply: FastifyReply) => {
-        reply.send({ success: true, otp: "123456" });
-    });
-
-    // New endpoint for OTP request
-    fastify.post("/otp/request", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/otp/request", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ mobile: z.string().min(10) });
         const { mobile } = schema.parse(req.body);
 
@@ -87,8 +81,7 @@ export default async function (fastify: FastifyInstance) {
         });
     });
 
-    // New endpoint for OTP verification
-    fastify.post("/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({
             mobile: z.string().min(10),
             otp: z.string().length(6)
@@ -120,21 +113,18 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user, isNewUser });
     });
 
-    // Add Facebook authentication
-    fastify.post("/facebook", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/facebook", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ accessToken: z.string() });
         const { accessToken } = schema.parse(req.body);
 
-        // Verify Facebook token and get user info
         const fbUser = await verifyFacebookToken(accessToken);
-        // Implementation needed for verifyFacebookToken
 
         let [user] = await db.select().from(users).where(eq(users.facebookId, fbUser.id));
         const isNewUser = !user;
 
         if (!user) {
             [user] = await db.insert(users).values({
-                mobile: fbUser.phone ?? "", // Provide a value for required 'mobile' field
+                mobile: fbUser.phone ?? "",
                 email: fbUser.email,
                 name: fbUser.name,
                 role: "USER",
@@ -151,37 +141,30 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user, isNewUser, socialProfile: fbUser });
     });
 
-    // Add refresh token endpoint
-    fastify.post("/refresh", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/auth/refresh", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ token: z.string() });
         const { token } = schema.parse(req.body);
 
-        // Verify existing token
         const decoded = verifyToken(token);
         if (
             !decoded ||
-            typeof decoded === "string" ||
-            typeof (decoded as JwtPayload).id === "undefined" ||
-            typeof (decoded as JwtPayload).role === "undefined"
+            typeof decoded.id === "undefined" ||
+            typeof decoded.role === "undefined"
         ) {
             return reply.code(401).send({ error: "Invalid token" });
         }
 
-        const payload = decoded as JwtPayload;
-        const newToken = signJwt({ id: payload.id, role: payload.role });
+        const newToken = signJwt({ id: decoded.id, role: decoded.role });
         reply.send({
             token: newToken,
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
         });
     });
 
-    // Add company selection endpoint
     fastify.post("/user/company/select", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ companyId: z.number() });
         const { companyId } = schema.parse(req.body);
 
-        // Ensure req.user is properly typed and has an 'id' property
-        // If using Fastify JWT plugin, you might need to decode the token or extend FastifyRequest type
         const user = req.user as { id: number };
         const userId = user.id;
 

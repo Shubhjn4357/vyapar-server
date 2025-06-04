@@ -4,7 +4,6 @@ import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/user";
 import companyRoutes from "./routes/companies";
-import billRoutes from "./routes/bills";
 import gstRoutes from "./routes/gst";
 import defaultRoute from "./routes/api";
 import billsRoutes from "./routes/bills";

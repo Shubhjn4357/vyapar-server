@@ -1,5 +1,7 @@
+
 import { pgTable, serial, varchar, jsonb, timestamp, pgEnum, uuid, boolean, numeric, text } from "drizzle-orm/pg-core";
 import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
+import { relations } from 'drizzle-orm';
 
 // Role enum (use lowercase for consistency)
 export const RoleEnum = pgEnum("role_enum", [
@@ -14,13 +16,25 @@ export const SubscriptionStatusEnum = pgEnum("subscription_status_enum", [
     "cancelled"
 ]);
 export type SubscriptionStatusType  = typeof SubscriptionStatusEnum.enumValues[number];
+
+export const companies = pgTable("companies", {
+    id: serial("id").primaryKey(),
+    name: varchar("name", { length: 128 }).notNull(),
+    gstin: varchar("gstin", { length: 20 }).notNull(),
+    address: text("address"),
+    createdBy: serial("created_by"),
+    updatedBy: serial("updated_by"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const users = pgTable("users", {
     id: serial("id").primaryKey(),
     name: text("name"),
     email: text("email"),
     mobile: text("mobile").notNull(),
     password: text("password"),
-    role: RoleEnum("role").default("USER"),
+    role: RoleEnum("role").default("USER").notNull(),
     googleId: text("google_id"),
     facebookId: text("facebook_id"),
     appleId: text("apple_id"),
@@ -29,12 +43,7 @@ export const users = pgTable("users", {
         status: SubscriptionStatusType,
         expiresAt: string;
     }>(),
-
-    companies: jsonb("companies").$type<Array<{
-        id: number;
-        name: string;
-        role: string;
-    }>>(),
+    companies: jsonb("companies").$type<Array<number>>(),
     selectedCompanyId: serial("selected_company_id").references(() => companies.id),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -49,16 +58,7 @@ export const otps = pgTable("otps", {
     verified: boolean("verified").default(false),
 });
 
-export const companies = pgTable("companies", {
-    id: serial("id").primaryKey(),
-    name: varchar("name", { length: 128 }).notNull(),
-    gstin: varchar("gstin", { length: 20 }).notNull(),
-    address: text("address"),
-    createdAt: timestamp("created_at").defaultNow(),
-    updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Customers table with relation to company
+// Customers table with relation to company and user
 export const customers = pgTable("customers", {
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
@@ -68,6 +68,8 @@ export const customers = pgTable("customers", {
     address: jsonb("address"),
     gstin: varchar("gstin", { length: 20 }),
     balance: numeric("balance").default("0"),
+    createdBy: serial("created_by").references(() => users.id), // FK to users
+    updatedBy: serial("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -78,25 +80,29 @@ export const bills = pgTable("bills", {
     customerName: varchar("customer_name", { length: 128 }).notNull(),
     amount: numeric("amount").notNull(),
     date: timestamp("date").notNull(),
-    items: jsonb("items").notNull(), // Array of BillItem
-    status: varchar("status", { length: 16 }).notNull(), // 'paid' | 'unpaid' | 'partial'
+    items: jsonb("items").notNull(),
+    status: varchar("status", { length: 16 }).notNull(),
     dueDate: timestamp("due_date").notNull(),
     notes: varchar("notes", { length: 255 }),
+    createdBy: serial("created_by").references(() => users.id), // FK to users
+    updatedBy: serial("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const payments = pgTable("payments", {
     id: uuid("id").primaryKey().defaultRandom(),
-    billId: uuid("bill_id").notNull(), // Should reference bills.id
-    companyId: uuid("company_id").notNull(), // Should reference companies.id
+    billId: uuid("bill_id").notNull().references(() => bills.id),
+    companyId: uuid("company_id").notNull().references(() => companies.id),
     amount: numeric("amount").notNull(),
     date: timestamp("date").notNull(),
-    mode: varchar("mode", { length: 32 }).notNull(), // 'cash' | 'upi' | 'netbanking' | 'card' | 'cheque' | 'bankTransfer'
-    status: varchar("status", { length: 16 }).notNull(), // 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'cancelled'
+    mode: varchar("mode", { length: 32 }).notNull(),
+    status: varchar("status", { length: 16 }).notNull(),
     reference: varchar("reference", { length: 128 }),
     notes: varchar("notes", { length: 255 }),
     metadata: jsonb("metadata"),
+    createdBy: serial("created_by").references(() => users.id), // FK to users
+    updatedBy: serial("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -108,8 +114,9 @@ export const accounts = pgTable("accounts", {
     debit: numeric("debit").default("0"),
     credit: numeric("credit").default("0"),
     account: varchar("account", { length: 100 }).notNull(),
-    type: varchar("type", { length: 32 }).notNull(), // 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' | 'journal' | 'ledger'
+    type: varchar("type", { length: 32 }).notNull(),
     reference: varchar("reference", { length: 100 }),
+    createdBy: serial("created_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -193,3 +200,47 @@ export type RoleEnumType = typeof RoleEnum.enumValues[number];
 export type SelectBill = typeof bills.$inferSelect;
 export type SelectCompany = typeof companies.$inferSelect;
 export type SelectPayment = typeof payments.$inferSelect;
+
+// --- Drizzle Relations ---
+export const usersRelations = relations(users, ({ many }) => ({
+    companies: many(companies, {
+        relationName: "userCompanies"
+    }),
+}));
+
+export const companiesRelations = relations(companies, ({ one, many }) => ({
+    creator: one(users, {
+        fields: [companies.createdBy],
+        references: [users.id],
+        relationName: "creator"
+    }),
+    updater: one(users, {
+        fields: [companies.updatedBy],
+        references: [users.id],
+        relationName: "updater"
+    }),
+    bills: many(bills),
+    payments: many(payments),
+    customers: many(customers),
+}));
+
+export const customersRelations = relations(customers, ({ one, many }) => ({
+    company: one(companies, {
+        fields: [customers.companyId],
+        references: [companies.id]
+    }),
+    creator: one(users, {
+        fields: [customers.createdBy],
+        references: [users.id]
+    }),
+    updater: one(users, {
+        fields: [customers.updatedBy],
+        references: [users.id]
+    }),
+    bills: many(bills),
+    payments: many(payments),
+    gstTransactions: many(gstTransactions),
+    aiInsights: many(aiInsights)
+}));
+
+// Repeat similar for bills, payments, etc., relating to users and companies as appropriate

@@ -1,12 +1,14 @@
-import { FastifyPluginAsync } from "fastify";
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
+import { AuthJwtPayload, verifyJwt } from "../utils/jwt";
 
 const authPlugin: FastifyPluginAsync = async (fastify) => {
-    fastify.decorate("authenticate", async (request, reply) => {
+    fastify.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
         try {
-            await request.jwtVerify();
+            const user = await verifyJwt(request.headers.authorization?.replace("Bearer ", "") || "");
+            request.user = user as AuthJwtPayload;
         } catch (err) {
-            reply.code(401).send({ error: "Unauthorized" });
+            return reply.code(401).send({ error: "Unauthorized" });
         }
     });
 };

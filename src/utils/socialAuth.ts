@@ -19,17 +19,21 @@ export interface FacebookProfile {
 }
 
 export async function verifyGoogleToken(token: string): Promise<GoogleProfile> {
-    const ticket = await googleClient.verifyIdToken({
-        idToken: token,
-        audience: process.env.GOOGLE_CLIENT_ID
-    });
-    const payload = ticket.getPayload();
-    return {
-        id: payload?.sub,
-        email: payload?.email,
-        name: payload?.name,
-        picture: payload?.picture
-    };
+    try {
+        const ticket = await googleClient.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        const payload = ticket.getPayload();
+        return {
+            id: payload?.sub,
+            email: payload?.email,
+            name: payload?.name,
+            picture: payload?.picture
+        };
+    } catch (err) {
+        throw new Error("Invalid Google token");
+    }
 }
 
 export async function verifyFacebookToken(accessToken: string): Promise<FacebookProfile> {
