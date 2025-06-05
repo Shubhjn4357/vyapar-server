@@ -27,13 +27,13 @@ export default async function (fastify: FastifyInstance) {
 
     // Get company by id
     fastify.get("/:id", { preHandler: [fastify.authenticate] }, async (req) => {
-        const { id } = req.params as { id: number };
+        const { id } = req.params as { id: string };
         return db.select().from(companies).where(eq(companies.id, id)).then(r => r[0]);
     });
 
     // Update company
     fastify.put("/:id", { preHandler: [fastify.authenticate] }, async (req) => {
-        const { id } = req.params as { id: number };
+        const { id } = req.params as { id: string };
         const data = selectCompanySchema.partial().parse(req.body);
         const updated = await db.update(companies).set(data).where(eq(companies.id, id)).returning().then(r => r[0]);
         return updated;
@@ -41,7 +41,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Delete company
     fastify.delete("/:id", { preHandler: [fastify.authenticate] }, async (req) => {
-        const { id } = req.params as { id: number };
+        const { id } = req.params as { id: string };
         await db.delete(companies).where(eq(companies.id, id));
         return { success: true };
     });

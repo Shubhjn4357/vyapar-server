@@ -9,7 +9,7 @@ import { generateOTP, verifyOTP } from "../utils/otp";
 import { verifyFacebookToken } from "../utils/socialAuth";
 
 export default async function (fastify: FastifyInstance) {
-    fastify.post("/auth/register", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/register", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({
             mobile: z.string().min(10),
             email: z.string().email().optional(),
@@ -32,13 +32,15 @@ export default async function (fastify: FastifyInstance) {
             role: "USER",
             subscription,
             companies: [],
-        }).returning();
-
+        }).returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription,companies: users.companies});
+        if (!user) {
+            return reply.code(400).send({ error: "User registration failed" });
+        }
         const token = signJwt({ id: user.id, role: user.role });
         reply.send({ token, user });
     });
 
-    fastify.post("/auth/login", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/login", async (req: FastifyRequest, reply: FastifyReply) => {
         const { mobile, password } = req.body as { mobile: string; password: string };
         const [user] = await db.select().from(users).where(eq(users.mobile, mobile));
         if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
@@ -48,7 +50,7 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user });
     });
 
-    fastify.post("/auth/google", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/google", async (req: FastifyRequest, reply: FastifyReply) => {
         const { googleId, email, name, phone } = req.body as { googleId: string; email: string; name?: string, phone?: string };
         let [user] = await db.select().from(users).where(eq(users.googleId, googleId));
         if (!user) {
@@ -70,7 +72,7 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user });
     });
 
-    fastify.post("/auth/otp/request", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/otp/request", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ mobile: z.string().min(10) });
         const { mobile } = schema.parse(req.body);
 
@@ -81,7 +83,7 @@ export default async function (fastify: FastifyInstance) {
         });
     });
 
-    fastify.post("/auth/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/otp/verify", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({
             mobile: z.string().min(10),
             otp: z.string().length(6)
@@ -113,7 +115,7 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user, isNewUser });
     });
 
-    fastify.post("/auth/facebook", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/facebook", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ accessToken: z.string() });
         const { accessToken } = schema.parse(req.body);
 
@@ -141,7 +143,7 @@ export default async function (fastify: FastifyInstance) {
         reply.send({ token, user, isNewUser, socialProfile: fbUser });
     });
 
-    fastify.post("/auth/refresh", async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.post("/refresh", async (req: FastifyRequest, reply: FastifyReply) => {
         const schema = z.object({ token: z.string() });
         const { token } = schema.parse(req.body);
 
@@ -162,7 +164,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     fastify.post("/user/company/select", async (req: FastifyRequest, reply: FastifyReply) => {
-        const schema = z.object({ companyId: z.number() });
+        const schema = z.object({ companyId: z.string() });
         const { companyId } = schema.parse(req.body);
 
         const user = req.user as { id: number };

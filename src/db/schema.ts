@@ -1,4 +1,3 @@
-
 import { pgTable, serial, varchar, jsonb, timestamp, pgEnum, uuid, boolean, numeric, text } from "drizzle-orm/pg-core";
 import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
 import { relations } from 'drizzle-orm';
@@ -18,7 +17,7 @@ export const SubscriptionStatusEnum = pgEnum("subscription_status_enum", [
 export type SubscriptionStatusType  = typeof SubscriptionStatusEnum.enumValues[number];
 
 export const companies = pgTable("companies", {
-    id: serial("id").primaryKey(),
+    id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 128 }).notNull(),
     gstin: varchar("gstin", { length: 20 }).notNull(),
     address: text("address"),
@@ -38,13 +37,14 @@ export const users = pgTable("users", {
     googleId: text("google_id"),
     facebookId: text("facebook_id"),
     appleId: text("apple_id"),
+    isProfileComplete: boolean("is_profile_complete").default(false),
     subscription: jsonb("subscription").$type<{
         planId: string,
         status: SubscriptionStatusType,
         expiresAt: string;
     }>(),
-    companies: jsonb("companies").$type<Array<number>>(),
-    selectedCompanyId: serial("selected_company_id").references(() => companies.id),
+    companies: jsonb("companies").$type<Array<string>>(), // now array of uuid strings
+    selectedCompanyId: uuid("selected_company_id").references(() => companies.id),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -222,6 +222,9 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
     bills: many(bills),
     payments: many(payments),
     customers: many(customers),
+    accounts: many(accounts),
+    gstTransactions: many(gstTransactions),
+    aiInsights: many(aiInsights)
 }));
 
 export const customersRelations = relations(customers, ({ one, many }) => ({
