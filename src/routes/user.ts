@@ -18,7 +18,13 @@ export default async function (fastify: FastifyInstance) {
         const [user] = await db.update(users).set(update).where(eq(users.id, userId)).returning();
         return user;
     });
-
+    fastify.put("/me/profile",{preHandler:[fastify.authenticate]},async(req:FastifyRequest)=>{
+        const userId = (req.user as { id: number }).id;
+        const update = selectUserSchema.partial().parse(req.body);
+        const isCompleted = {...update,isProfileComplete:true}
+        const [user] = await db.update(users).set(isCompleted).where(eq(users.id, userId)).returning();
+        return user
+    })
     // List all users (admin only)
     fastify.get("/", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (_req: FastifyRequest) => {
         return db.select().from(users);

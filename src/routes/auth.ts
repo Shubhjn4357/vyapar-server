@@ -49,7 +49,31 @@ export default async function (fastify: FastifyInstance) {
         const token = signJwt({ id: user.id, role: user.role });
         reply.send({ token, user });
     });
+    fastify.post("/reset-password", async (req: FastifyRequest, reply: FastifyReply) => {
+        const schema = z.object({
+            mobile: z.string().min(10),
+            password: z.string().min(6),
+            otp: z.string().length(6)
+        });
+        const { mobile, password, otp } = schema.parse(req.body);
 
+        const isValid = await verifyOTP(mobile, otp);
+        if (!isValid) {
+            return reply.code(400).send({ error: "Invalid OTP" });
+        }
+
+        const hash = await bcrypt.hash(password, 10);
+        const [user] = await db.update(users)
+            .set({ password: hash })
+            .where(eq(users.mobile, mobile))
+            .returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription,companies: users.companies});
+
+        if (!user) {
+            return reply.code(400).send({ error: "Password reset failed" });
+        }
+        const token = signJwt({ id: user.id, role: user.role });
+        reply.send({ token, user });
+    });
     fastify.post("/google", async (req: FastifyRequest, reply: FastifyReply) => {
         const { googleId, email, name, phone } = req.body as { googleId: string; email: string; name?: string, phone?: string };
         let [user] = await db.select().from(users).where(eq(users.googleId, googleId));
