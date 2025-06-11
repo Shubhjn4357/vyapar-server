@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, jsonb, timestamp, pgEnum, uuid, boolean, numeric, text } from "drizzle-orm/pg-core";
+import { pgTable, integer, varchar, jsonb, timestamp, pgEnum, uuid, boolean, numeric, text } from "drizzle-orm/pg-core";
 import { createSelectSchema, createInsertSchema } from 'drizzle-zod';
 import { relations } from 'drizzle-orm';
 
@@ -26,18 +26,18 @@ export type AiInsightType = typeof aiInsightTypeEnums.enumValues[number];
 
 export const companies = pgTable("companies", {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId:serial("userId").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: varchar("name", { length: 128 }).notNull(),
     gstin: varchar("gstin", { length: 20 }).notNull(),
     address: text("address"),
-    createdBy: serial("created_by"),
-    updatedBy: serial("updated_by"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    updatedBy: integer("updated_by").references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const users = pgTable("users", {
-    id: serial("id").primaryKey(),
+    id: integer("id").primaryKey().notNull(),
     name: text("name"),
     email: text("email"),
     mobile: text("mobile").notNull(),
@@ -57,7 +57,7 @@ export const users = pgTable("users", {
 });
 
 export const otps = pgTable("otps", {
-    id: serial("id").primaryKey(),
+    id: integer("id").primaryKey(),
     mobile: text("mobile").notNull(),
     otp: text("otp").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
@@ -69,15 +69,15 @@ export const otps = pgTable("otps", {
 export const customers = pgTable("customers", {
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    userId: uuid("company_id").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: varchar("name", { length: 128 }).notNull(),
     email: varchar("email", { length: 128 }),
     phone: varchar("phone", { length: 32 }),
     address: jsonb("address"),
     gstin: varchar("gstin", { length: 20 }),
     balance: numeric("balance").default("0"),
-    createdBy: serial("created_by").references(() => users.id), // FK to users
-    updatedBy: serial("updated_by").references(() => users.id), // FK to users
+    createdBy: integer("created_by").references(() => users.id), // FK to users
+    updatedBy: integer("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -85,15 +85,15 @@ export const customers = pgTable("customers", {
 export const bills = pgTable("bills", {
     id: uuid("id").primaryKey().defaultRandom(),
     customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    customerName: varchar("customer_name").notNull().references(() => customers.name, { onDelete: "cascade", onUpdate: "cascade" }),
+    customerName: varchar("customer_name").notNull(),
     amount: numeric("amount").notNull(),
     date: timestamp("date").notNull(),
     items: jsonb("items").notNull(),
     status: varchar("status", { length: 16 }).notNull(),
     dueDate: timestamp("due_date").notNull(),
     notes: varchar("notes", { length: 255 }),
-    createdBy: serial("created_by").references(() => users.id), // FK to users
-    updatedBy: serial("updated_by").references(() => users.id), // FK to users
+    createdBy: integer("created_by").references(() => users.id), // FK to users
+    updatedBy: integer("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -102,7 +102,7 @@ export const payments = pgTable("payments", {
     id: uuid("id").primaryKey().defaultRandom(),
     billId: uuid("bill_id").notNull().references(() => bills.id),
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     amount: numeric("amount").notNull(),
     date: timestamp("date").notNull(),
     mode: varchar("mode", { length: 32 }).notNull(),
@@ -110,8 +110,8 @@ export const payments = pgTable("payments", {
     reference: varchar("reference", { length: 128 }),
     notes: varchar("notes", { length: 255 }),
     metadata: jsonb("metadata"),
-    createdBy: serial("created_by").references(() => users.id), // FK to users
-    updatedBy: serial("updated_by").references(() => users.id), // FK to users
+    createdBy: integer("created_by").references(() => users.id), // FK to users
+    updatedBy: integer("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -127,7 +127,7 @@ export const accounts = pgTable("accounts", {
     account: varchar("account", { length: 100 }).notNull(),
     type: varchar("type", { length: 32 }).notNull(),
     reference: varchar("reference", { length: 100 }),
-    createdBy: serial("created_by").references(() => users.id), // FK to users
+    createdBy: integer("created_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -257,10 +257,7 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
         fields: [customers.updatedBy],
         references: [users.id]
     }),
-    bills: many(bills),
-    payments: many(payments),
-    gstTransactions: many(gstTransactions),
-    aiInsights: many(aiInsights)
+    bills: many(bills)
 }));
 
 // Repeat similar for bills, payments, etc., relating to users and companies as appropriate
