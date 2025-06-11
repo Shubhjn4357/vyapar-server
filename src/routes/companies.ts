@@ -29,7 +29,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // Get companies by array of user ids
-    fastify.post("/user/ids", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    fastify.get("/user/ids", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
             const { ids } = req.body as { ids: string[] };
             if (!Array.isArray(ids) || ids.length === 0) {
