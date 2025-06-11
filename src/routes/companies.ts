@@ -32,6 +32,7 @@ export default async function (fastify: FastifyInstance) {
     fastify.get("/user/ids", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
             const { ids } = req.body as { ids: string[] };
+            console.log('ids',ids)
             if (!Array.isArray(ids) || ids.length === 0) {
                 return reply.code(400).send({ success: false, error: "ids must be a non-empty array" });
             }
