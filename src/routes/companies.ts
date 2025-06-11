@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/drizzle";
-import { companies, insertCompanySchema, selectCompanySchema } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { companies, insertCompanySchema, selectCompanySchema, users } from "../db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 // Removed unused CompanySchema
@@ -28,6 +28,22 @@ export default async function (fastify: FastifyInstance) {
         }
     });
 
+    // Get companies by array of user ids
+    fastify.post("/user/ids", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const { ids } = req.body as { ids: string[] };
+            if (!Array.isArray(ids) || ids.length === 0) {
+                return reply.code(400).send({ success: false, error: "ids must be a non-empty array" });
+            }
+            const companiesData = await db
+                .select()
+                .from(companies)
+                .where(inArray(companies.id, ids));
+            return reply.send({ success: true, data: companiesData });
+        } catch (error: any) {
+            return reply.code(500).send({ success: false, error: error.message || "Failed to fetch companies" });
+        }
+    });
     // Get company by id
     fastify.get("/:id", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
