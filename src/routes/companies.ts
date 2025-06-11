@@ -1,9 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/drizzle";
 import { companies, insertCompanySchema, selectCompanySchema, users } from "../db/schema";
-import { eq, inArray } from "drizzle-orm";
-import { z } from "zod";
-
+import { eq } from "drizzle-orm";
 // Removed unused CompanySchema
 
 export default async function (fastify: FastifyInstance) {
@@ -28,18 +26,15 @@ export default async function (fastify: FastifyInstance) {
         }
     });
 
-    // Get companies by array of user ids
-    fastify.get("/user/ids", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    // Get companies by users
+    fastify.get("/user/:userId", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
-            const { ids } = req.body as { ids: string[] };
-            console.log('ids',ids)
-            if (!Array.isArray(ids) || ids.length === 0) {
-                return reply.code(400).send({ success: false, error: "ids must be a non-empty array" });
+            const { userId } = req.params as { userId: number };
+            const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
+            if (!user) {
+                return reply.code(404).send({ success: false, error: "User not found" });
             }
-            const companiesData = await db
-                .select()
-                .from(companies)
-                .where(inArray(companies.id, ids));
+            const companiesData = await db.select().from(companies).where(eq(companies.userId, userId));
             return reply.send({ success: true, data: companiesData });
         } catch (error: any) {
             return reply.code(500).send({ success: false, error: error.message || "Failed to fetch companies" });
@@ -78,7 +73,7 @@ export default async function (fastify: FastifyInstance) {
     fastify.delete("/:id", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
             const { id } = req.params as { id: string };
-            const deleted = await db.delete(companies).where(eq(companies.id, id));
+            await db.delete(companies).where(eq(companies.id, id));
             return reply.send({ success: true });
         } catch (error: any) {
             return reply.code(500).send({ success: false, error: error.message || "Failed to delete company" });

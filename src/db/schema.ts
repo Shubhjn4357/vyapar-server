@@ -14,10 +14,19 @@ export const SubscriptionStatusEnum = pgEnum("subscription_status_enum", [
     "expired",
     "cancelled"
 ]);
+export const SalesTypeEnum = pgEnum("sales_type_enum", [
+    "sale",
+    "purchase",
+]);
+export const aiInsightTypeEnums = pgEnum('aiInsights_type', ['tax_optimization', 'risk', 'trend']);
 export type SubscriptionStatusType  = typeof SubscriptionStatusEnum.enumValues[number];
+export type RoleType = typeof RoleEnum.enumValues[number];
+export type SalesType = typeof SalesTypeEnum.enumValues[number];
+export type AiInsightType = typeof aiInsightTypeEnums.enumValues[number];
 
 export const companies = pgTable("companies", {
     id: uuid("id").primaryKey().defaultRandom(),
+    userId:serial("userId").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: varchar("name", { length: 128 }).notNull(),
     gstin: varchar("gstin", { length: 20 }).notNull(),
     address: text("address"),
@@ -43,8 +52,6 @@ export const users = pgTable("users", {
         status: SubscriptionStatusType,
         expiresAt: string;
     }>(),
-    companies: jsonb("companies").$type<Array<string>>(), // now array of uuid strings
-    selectedCompanyId: uuid("selected_company_id").references(() => companies.id),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -61,7 +68,8 @@ export const otps = pgTable("otps", {
 // Customers table with relation to company and user
 export const customers = pgTable("customers", {
     id: uuid("id").primaryKey().defaultRandom(),
-    companyId: uuid("company_id").notNull().references(() => companies.id),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    userId: uuid("company_id").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: varchar("name", { length: 128 }).notNull(),
     email: varchar("email", { length: 128 }),
     phone: varchar("phone", { length: 32 }),
@@ -76,8 +84,8 @@ export const customers = pgTable("customers", {
 
 export const bills = pgTable("bills", {
     id: uuid("id").primaryKey().defaultRandom(),
-    customerId: varchar("customer_id", { length: 64 }).notNull(),
-    customerName: varchar("customer_name", { length: 128 }).notNull(),
+    customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    customerName: varchar("customer_name").notNull().references(() => customers.name, { onDelete: "cascade", onUpdate: "cascade" }),
     amount: numeric("amount").notNull(),
     date: timestamp("date").notNull(),
     items: jsonb("items").notNull(),
@@ -93,7 +101,8 @@ export const bills = pgTable("bills", {
 export const payments = pgTable("payments", {
     id: uuid("id").primaryKey().defaultRandom(),
     billId: uuid("bill_id").notNull().references(() => bills.id),
-    companyId: uuid("company_id").notNull().references(() => companies.id),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     amount: numeric("amount").notNull(),
     date: timestamp("date").notNull(),
     mode: varchar("mode", { length: 32 }).notNull(),
@@ -109,6 +118,8 @@ export const payments = pgTable("payments", {
 
 export const accounts = pgTable("accounts", {
     id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
     date: timestamp("date").notNull(),
     description: varchar("description", { length: 255 }),
     debit: numeric("debit").default("0"),
@@ -124,7 +135,7 @@ export const gstTransactions = pgTable('gst_transactions', {
     id: uuid('id').primaryKey().defaultRandom(),
     companyId: uuid('company_id').notNull().references(() => companies.id),
     billId: uuid('bill_id').references(() => bills.id),
-    type: varchar('type', { length: 16 }).notNull(), // 'sales' | 'purchase'
+    type:SalesTypeEnum('type').notNull(),
     date: timestamp('date').notNull(),
     partyName: varchar('party_name', { length: 128 }),
     partyGstin: varchar('party_gstin', { length: 20 }),
@@ -144,7 +155,7 @@ export const gstTransactions = pgTable('gst_transactions', {
 export const aiInsights = pgTable('ai_insights', {
     id: uuid('id').primaryKey().defaultRandom(),
     companyId: uuid('company_id').notNull().references(() => companies.id),
-    type: varchar('type', { length: 32 }).notNull(), // e.g. 'tax_optimization', 'risk', 'trend'
+    type: aiInsightTypeEnums('type').notNull(),
     data: jsonb('data').notNull(), // AI result payload
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
@@ -206,6 +217,8 @@ export const usersRelations = relations(users, ({ many }) => ({
     companies: many(companies, {
         relationName: "userCompanies"
     }),
+    customers: many(customers),
+    payments: many(payments)
 }));
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -228,6 +241,10 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
 }));
 
 export const customersRelations = relations(customers, ({ one, many }) => ({
+    user: one(users, {
+        fields: [customers.userId],
+        references: [users.id]
+    }),
     company: one(companies, {
         fields: [customers.companyId],
         references: [companies.id]
