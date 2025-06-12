@@ -75,7 +75,7 @@ export default async function (fastify: FastifyInstance) {
             const [user] = await db.update(users)
                 .set({ password: hash })
                 .where(eq(users.mobile, mobile))
-                .returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription,companies: users.companies});
+                .returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription});
 
             if (!user) {
                 return reply.code(400).send({ error: "Password reset failed" });
@@ -102,7 +102,6 @@ export default async function (fastify: FastifyInstance) {
                     name,
                     role: "USER",
                     subscription,
-                    companies: [],
                     email,
                 }).returning();
             }
@@ -153,7 +152,7 @@ export default async function (fastify: FastifyInstance) {
                         status: "active",
                         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
                     },
-                    companies: []
+                   
                 }).returning();
             }
 
@@ -185,7 +184,6 @@ export default async function (fastify: FastifyInstance) {
                         status: "active",
                         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
                     },
-                    companies: []
                 }).returning();
             }
 
@@ -217,24 +215,6 @@ export default async function (fastify: FastifyInstance) {
             });
         } catch (err: any) {
             reply.code(400).send({ error: err.message || "Token refresh failed" });
-        }
-    });
-
-    fastify.post("/user/company/select", async (req: FastifyRequest, reply: FastifyReply) => {
-        try {
-            const schema = z.object({ companyId: z.string() });
-            const { companyId } = schema.parse(req.body);
-
-            const user = req.user as { id: number };
-            const userId = user.id;
-
-            await db.update(users)
-                .set({ selectedCompanyId: companyId })
-                .where(eq(users.id, userId));
-
-            reply.send({ success: true });
-        } catch (err: any) {
-            reply.code(400).send({ error: err.message || "Company selection failed" });
         }
     });
 }
