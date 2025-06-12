@@ -39,6 +39,7 @@ export default async function (fastify: FastifyInstance) {
             const token = signJwt({ id: user.id, role: user.role });
             reply.send({ token, user });
         } catch (err: any) {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "Registration failed" });
         }
     });
@@ -53,6 +54,7 @@ export default async function (fastify: FastifyInstance) {
             const token = signJwt({ id: user.id, role: user.role });
             reply.send({ token, user });
         } catch (err: any) {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "Login failed" });
         }
     });
@@ -83,6 +85,7 @@ export default async function (fastify: FastifyInstance) {
             const token = signJwt({ id: user.id, role: user.role });
             reply.send({ token, user });
         } catch (err: any) {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "Reset password failed" });
         }
     });
@@ -107,7 +110,9 @@ export default async function (fastify: FastifyInstance) {
             }
             const token = signJwt({ id: user.id, role: user.role });
             reply.send({ token, user });
-        } catch (err: any) {
+        } catch (err: any) 
+        {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "Google login failed" });
         }
     });
@@ -123,6 +128,7 @@ export default async function (fastify: FastifyInstance) {
                 expiresAt: otp.expiresAt
             });
         } catch (err: any) {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "OTP request failed" });
         }
     });
@@ -159,6 +165,7 @@ export default async function (fastify: FastifyInstance) {
             const token = signJwt({ id: user.id, role: user.role });
             reply.send({ token, user, isNewUser });
         } catch (err: any) {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "OTP verification failed" });
         }
     });
@@ -214,6 +221,7 @@ export default async function (fastify: FastifyInstance) {
                 expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
             });
         } catch (err: any) {
+            fastify.log.error(err);
             reply.code(400).send({ error: err.message || "Token refresh failed" });
         }
     });
