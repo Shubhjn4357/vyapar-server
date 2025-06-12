@@ -12,6 +12,7 @@ export default async function (fastify: FastifyInstance) {
             const inserted = await db.insert(companies).values(data).returning().then(r => r[0]);
             return reply.code(201).send({ success: true, data: inserted });
         } catch (error: any) {
+            fastify.log.error(error);
             return reply.code(400).send({ success: false, error: error.message || "Failed to add company" });
         }
     });
