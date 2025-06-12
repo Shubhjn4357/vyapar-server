@@ -31,9 +31,8 @@ export default async function (fastify: FastifyInstance) {
                 password: hash,
                 name: data.name,
                 role: "USER",
-                subscription,
-                companies: [],
-            }).returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription,companies: users.companies});
+                subscription
+            }).returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription});
             if (!user) {
                 return reply.code(400).send({ error: "User registration failed" });
             }

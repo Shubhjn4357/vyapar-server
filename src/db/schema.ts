@@ -37,7 +37,7 @@ export const companies = pgTable("companies", {
 });
 
 export const users = pgTable("users", {
-    id: integer("id").primaryKey().notNull(),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     name: text("name"),
     email: text("email"),
     mobile: text("mobile").notNull(),
@@ -57,7 +57,7 @@ export const users = pgTable("users", {
 });
 
 export const otps = pgTable("otps", {
-    id: integer("id").primaryKey(),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     mobile: text("mobile").notNull(),
     otp: text("otp").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
