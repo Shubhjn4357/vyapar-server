@@ -9,6 +9,8 @@ import defaultRoute from "./routes/api";
 import billsRoutes from "./routes/bills";
 import customersRoutes from "./routes/customers";
 import paymentRoutes from "./routes/payments";
+import reportsRoutes from "./routes/reports";
+import productsRoutes from "./routes/products";
 import fastifyCors from "@fastify/cors";
 import dotenv from "dotenv";
 import roleGuard from "./plugins/roleGuard";
@@ -26,6 +28,8 @@ fastify.register(gstRoutes, { prefix: "/api/gst" });
 fastify.register(paymentRoutes, { prefix: "/api/payments" });
 fastify.register(billsRoutes, { prefix: "/api/bills" });
 fastify.register(customersRoutes, { prefix: "/api/customers" });
+fastify.register(reportsRoutes, { prefix: "/api/reports" });
+fastify.register(productsRoutes, { prefix: "/api/products" });
 fastify.register(defaultRoute,{ prefix: "/api" });
 fastify.setErrorHandler((error, request, reply) => {
     request.log.error(error);

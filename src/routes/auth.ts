@@ -37,10 +37,17 @@ export default async function (fastify: FastifyInstance) {
                 return reply.code(400).send({ error: "User registration failed" });
             }
             const token = signJwt({ id: user.id, role: user.role });
-            reply.send({ token, user });
+            reply.send({ 
+                status: 'success',
+                data: { token, user },
+                message: 'Registration successful'
+            });
         } catch (err: any) {
             fastify.log.error(err);
-            reply.code(400).send({ error: err.message || "Registration failed" });
+            reply.code(400).send({ 
+                status: 'error',
+                message: err.message || "Registration failed" 
+            });
         }
     });
 
@@ -52,10 +59,17 @@ export default async function (fastify: FastifyInstance) {
                 return reply.code(401).send({ error: "Invalid credentials" });
             }
             const token = signJwt({ id: user.id, role: user.role });
-            reply.send({ token, user });
+            reply.send({ 
+                status: 'success',
+                data: { token, user },
+                message: 'Login successful'
+            });
         } catch (err: any) {
             fastify.log.error(err);
-            reply.code(400).send({ error: err.message || "Login failed" });
+            reply.code(400).send({ 
+                status: 'error',
+                message: err.message || "Login failed" 
+            });
         }
     });
 

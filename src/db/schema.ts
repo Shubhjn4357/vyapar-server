@@ -75,6 +75,14 @@ export const customers = pgTable("customers", {
     phone: varchar("phone", { length: 32 }),
     address: jsonb("address"),
     gstin: varchar("gstin", { length: 20 }),
+    contactPerson: varchar("contact_person", { length: 128 }),
+    creditLimit: numeric("credit_limit").default("0"),
+    paymentTerms: integer("payment_terms").default(30), // days
+    isActive: boolean("is_active").default(true),
+    totalBills: integer("total_bills").default(0),
+    totalAmount: numeric("total_amount").default("0"),
+    outstandingAmount: numeric("outstanding_amount").default("0"),
+    lastTransactionDate: timestamp("last_transaction_date"),
     balance: numeric("balance").default("0"),
     createdBy: integer("created_by").references(() => users.id), // FK to users
     updatedBy: integer("updated_by").references(() => users.id), // FK to users
@@ -84,14 +92,30 @@ export const customers = pgTable("customers", {
 
 export const bills = pgTable("bills", {
     id: uuid("id").primaryKey().defaultRandom(),
+    billNumber: varchar("bill_number").notNull(),
     customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "cascade", onUpdate: "cascade" }),
     customerName: varchar("customer_name").notNull(),
+    customerGstin: varchar("customer_gstin", { length: 20 }),
+    customerAddress: text("customer_address"),
+    customerPhone: varchar("customer_phone", { length: 32 }),
+    customerEmail: varchar("customer_email", { length: 128 }),
     amount: numeric("amount").notNull(),
+    taxAmount: numeric("tax_amount").default("0"),
+    totalAmount: numeric("total_amount").notNull(),
     date: timestamp("date").notNull(),
-    items: jsonb("items").notNull(),
-    status: varchar("status", { length: 16 }).notNull(),
     dueDate: timestamp("due_date").notNull(),
-    notes: varchar("notes", { length: 255 }),
+    items: jsonb("items").notNull(),
+    status: varchar("status", { length: 16 }).notNull().default("draft"),
+    paymentStatus: varchar("payment_status", { length: 16 }).notNull().default("pending"),
+    paymentMethod: varchar("payment_method", { length: 32 }),
+    notes: text("notes"),
+    terms: text("terms"),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    cgst: numeric("cgst").default("0"),
+    sgst: numeric("sgst").default("0"),
+    igst: numeric("igst").default("0"),
+    discount: numeric("discount").default("0"),
+    discountType: varchar("discount_type", { length: 16 }).default("amount"),
     createdBy: integer("created_by").references(() => users.id), // FK to users
     updatedBy: integer("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),
