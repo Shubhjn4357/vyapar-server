@@ -1,6 +1,7 @@
 import "fastify";
-import { RoleEnumType, SelectUsers } from "../db/schema";
-import { FastifyReply } from 'fastify';
+import { RoleEnumType, SelectCompanies, SubscriptionStatusType } from "../db/schema";
+import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthJwtPayload } from "../utils/jwt";
 
 declare module "fastify" {
     interface FastifyInstance {
@@ -8,6 +9,12 @@ declare module "fastify" {
         requireRole: (role: RoleEnumType) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     }
     interface FastifyRequest {
-        user: SelectUsers;
+        user?: AuthJwtPayload;
+        company?: SelectCompanies;
+        subscription?: {
+            planId: string;
+            status: SubscriptionStatusType;
+            expiresAt: string;
+        };
     }
 }

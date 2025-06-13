@@ -1,23 +1,46 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/drizzle";
 import { companies, insertCompanySchema, selectCompanySchema, users } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { requireSubscription, requireCompanyAccess } from "../plugins/roleGuard";
 
 export default async function (fastify: FastifyInstance) {
     // Create company
-    fastify.post("/add", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    fastify.post("/add", { 
+        preHandler: [fastify.authenticate, requireSubscription(['free', 'basic', 'premium'])] 
+    }, async (req, reply) => {
         try {
             const createCompanySchema = z.object({
-                userId: z.number(),
-                name: z.string(),
-                gstin: z.string(),
+                name: z.string().min(1, "Company name is required"),
+                gstin: z.string().min(15, "Valid GSTIN is required"),
                 address: z.string().optional()
             });
             
             const data = createCompanySchema.parse(req.body);
+            
+            // Check subscription limits for company creation
+            const userCompanies = await db.select()
+                .from(companies)
+                .where(eq(companies.userId, (req.user as any).id));
+            
+            const subscription = req.subscription!;
+            let maxCompanies = 1; // free plan
+            if (subscription.planId === 'basic') maxCompanies = 3;
+            if (subscription.planId === 'premium') maxCompanies = 10;
+            
+            if (userCompanies.length >= maxCompanies) {
+                return reply.code(403).send({
+                    status: 'error',
+                    message: `Your ${subscription.planId} plan allows maximum ${maxCompanies} companies. Please upgrade your subscription.`
+                });
+            }
+            
             const companyData = {
-                ...data,
+                userId: (req.user as any).id,
+                name: data.name,
+                gstin: data.gstin,
+                address: data.address,
                 createdBy: (req.user as any).id,
                 updatedBy: (req.user as any).id
             };
@@ -53,8 +76,24 @@ export default async function (fastify: FastifyInstance) {
         }
     });
 
-    // Get companies by users
-    fastify.get("/user/:userId", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    // Get current user's companies
+    fastify.get("/my", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const companiesData = await db.select().from(companies).where(eq(companies.userId, (req.user as any).id));
+            return reply.send({ 
+                status: 'success', 
+                data: companiesData 
+            });
+        } catch (error: any) {
+            return reply.code(500).send({ 
+                status: 'error', 
+                message: error.message || "Failed to fetch companies" 
+            });
+        }
+    });
+
+    // Get companies by users (admin only)
+    fastify.get("/user/:userId", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (req, reply) => {
         try {
             const { userId } = req.params as { userId: number };
             const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
