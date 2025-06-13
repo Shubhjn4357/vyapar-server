@@ -583,7 +583,7 @@ export default async function (fastify: FastifyInstance) {
                 totalAmount: Number(analytics[0].totalAmount) || 0,
                 averageAmount: Number(analytics[0].averageAmount) || 0,
                 chartData: chartData.map(item => ({
-                    period: item.period,
+                    period: (item.period instanceof Date ? item.period.toISOString() : String(item.period)),
                     amount: Number(item.amount) || 0,
                     count: Number(item.count) || 0
                 }))
