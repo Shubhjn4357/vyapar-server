@@ -15,8 +15,8 @@ export const SubscriptionStatusEnum = pgEnum("subscription_status_enum", [
     "cancelled"
 ]);
 export const SalesTypeEnum = pgEnum("sales_type_enum", [
-    "SALE",
-    "PURCHASE",
+    "sale",
+    "purchase",
 ]);
 export const aiInsightTypeEnums = pgEnum('aiInsights_type', ['tax_optimization', 'risk', 'trend']);
 export type SubscriptionStatusType  = typeof SubscriptionStatusEnum.enumValues[number];
