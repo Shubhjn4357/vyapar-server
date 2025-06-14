@@ -4,21 +4,49 @@ import { relations } from 'drizzle-orm';
 
 // Role enum (use lowercase for consistency)
 export const RoleEnum = pgEnum("role_enum", [
-    "USER",
-    "ADMIN",
+    "GUEST",
+    "USER", 
+    "STAFF",
     "MANAGER",
-    "SUPER"
+    "ADMIN",
+    "DEVELOPER"
 ]);
 export const SubscriptionStatusEnum = pgEnum("subscription_status_enum", [
     "active",
     "expired",
-    "cancelled"
+    "cancelled",
+    "trial"
+]);
+export const SubscriptionPlanEnum = pgEnum("subscription_plan_enum", [
+    "free",
+    "basic", 
+    "premium",
+    "unlimited"
 ]);
 export const SalesTypeEnum = pgEnum("sales_type_enum", [
     "sale",
     "purchase",
 ]);
-export const aiInsightTypeEnums = pgEnum('aiInsights_type', ['tax_optimization', 'risk', 'trend']);
+export const aiInsightTypeEnums = pgEnum('aiInsights_type', ['tax_optimization', 'risk', 'trend', 'forecast', 'expense_analysis']);
+export const AuthProviderEnum = pgEnum("auth_provider_enum", [
+    "email",
+    "google",
+    "facebook",
+    "apple"
+]);
+export const NotificationTypeEnum = pgEnum("notification_type_enum", [
+    "bill_reminder",
+    "payment_received", 
+    "subscription_expiry",
+    "system_update",
+    "promotional"
+]);
+export const SyncStatusEnum = pgEnum("sync_status_enum", [
+    "pending",
+    "synced",
+    "failed",
+    "conflict"
+]);
 export type SubscriptionStatusType  = typeof SubscriptionStatusEnum.enumValues[number];
 export type RoleType = typeof RoleEnum.enumValues[number];
 export type SalesType = typeof SalesTypeEnum.enumValues[number];
@@ -40,29 +68,195 @@ export const users = pgTable("users", {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     name: text("name"),
     email: text("email"),
-    mobile: text("mobile").notNull(),
+    mobile: text("mobile"),
     password: text("password"),
     role: RoleEnum("role").default("USER").notNull(),
+    authProvider: AuthProviderEnum("auth_provider").default("email").notNull(),
     googleId: text("google_id"),
     facebookId: text("facebook_id"),
     appleId: text("apple_id"),
+    isGuest: boolean("is_guest").default(false),
     isProfileComplete: boolean("is_profile_complete").default(false),
+    isEmailVerified: boolean("is_email_verified").default(false),
+    isMobileVerified: boolean("is_mobile_verified").default(false),
+    avatar: text("avatar"),
+    preferences: jsonb("preferences").$type<{
+        theme: 'light' | 'dark' | 'system';
+        language: string;
+        currency: string;
+        dateFormat: string;
+        notifications: boolean;
+        animations: boolean;
+    }>().default({
+        theme: 'system',
+        language: 'en',
+        currency: 'INR',
+        dateFormat: 'DD/MM/YYYY',
+        notifications: true,
+        animations: true
+    }),
     subscription: jsonb("subscription").$type<{
-        planId: string,
-        status: SubscriptionStatusType,
+        plan: 'free' | 'basic' | 'premium' | 'unlimited';
+        status: SubscriptionStatusType;
         expiresAt: string;
-    }>(),
+        companiesLimit: number;
+        features: string[];
+    }>().default({
+        plan: 'free',
+        status: 'active',
+        expiresAt: '',
+        companiesLimit: 1,
+        features: []
+    }),
+    lastLoginAt: timestamp("last_login_at"),
+    deviceInfo: jsonb("device_info"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const otps = pgTable("otps", {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-    mobile: text("mobile").notNull(),
+    identifier: text("identifier").notNull(), // email or mobile
+    type: varchar("type", { length: 10 }).notNull(), // 'email' or 'sms'
     otp: text("otp").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow(),
     verified: boolean("verified").default(false),
+});
+
+// Company members table for role-based access
+export const companyMembers = pgTable("company_members", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: RoleEnum("role").default("STAFF").notNull(),
+    permissions: jsonb("permissions").$type<{
+        canCreateBills: boolean;
+        canEditBills: boolean;
+        canDeleteBills: boolean;
+        canViewReports: boolean;
+        canManageCustomers: boolean;
+        canManageProducts: boolean;
+        canManagePayments: boolean;
+        canManageSettings: boolean;
+    }>().default({
+        canCreateBills: true,
+        canEditBills: false,
+        canDeleteBills: false,
+        canViewReports: false,
+        canManageCustomers: false,
+        canManageProducts: false,
+        canManagePayments: false,
+        canManageSettings: false
+    }),
+    invitedBy: integer("invited_by").references(() => users.id),
+    joinedAt: timestamp("joined_at").defaultNow(),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Products table
+export const products = pgTable("products", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    sku: varchar("sku", { length: 100 }),
+    barcode: varchar("barcode", { length: 100 }),
+    category: varchar("category", { length: 100 }),
+    unit: varchar("unit", { length: 50 }).default("pcs"),
+    sellingPrice: numeric("selling_price").notNull(),
+    costPrice: numeric("cost_price"),
+    mrp: numeric("mrp"),
+    stock: integer("stock").default(0),
+    minStock: integer("min_stock").default(0),
+    maxStock: integer("max_stock"),
+    taxRate: numeric("tax_rate").default("0"),
+    hsnCode: varchar("hsn_code", { length: 20 }),
+    images: jsonb("images").$type<string[]>().default([]),
+    isActive: boolean("is_active").default(true),
+    createdBy: integer("created_by").references(() => users.id),
+    updatedBy: integer("updated_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Offline sync table
+export const offlineSync = pgTable("offline_sync", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+    tableName: varchar("table_name", { length: 100 }).notNull(),
+    recordId: varchar("record_id", { length: 100 }).notNull(),
+    operation: varchar("operation", { length: 20 }).notNull(), // 'create', 'update', 'delete'
+    data: jsonb("data").notNull(),
+    status: SyncStatusEnum("status").default("pending").notNull(),
+    deviceId: varchar("device_id", { length: 100 }),
+    conflictData: jsonb("conflict_data"),
+    createdAt: timestamp("created_at").defaultNow(),
+    syncedAt: timestamp("synced_at"),
+});
+
+// Notifications table
+export const notifications = pgTable("notifications", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+    type: NotificationTypeEnum("type").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    data: jsonb("data"),
+    isRead: boolean("is_read").default(false),
+    isGlobal: boolean("is_global").default(false),
+    scheduledFor: timestamp("scheduled_for"),
+    createdAt: timestamp("created_at").defaultNow(),
+});
+
+// File uploads table
+export const fileUploads = pgTable("file_uploads", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    originalName: varchar("original_name", { length: 255 }).notNull(),
+    mimeType: varchar("mime_type", { length: 100 }).notNull(),
+    size: integer("size").notNull(),
+    path: text("path").notNull(),
+    url: text("url"),
+    category: varchar("category", { length: 50 }), // 'avatar', 'bill', 'product', 'document'
+    isCompressed: boolean("is_compressed").default(false),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Ledger accounts table
+export const ledgerAccounts = pgTable("ledger_accounts", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    code: varchar("code", { length: 50 }),
+    type: varchar("type", { length: 50 }).notNull(), // 'asset', 'liability', 'equity', 'income', 'expense'
+    subType: varchar("sub_type", { length: 50 }),
+    parentId: uuid("parent_id").references(() => ledgerAccounts.id),
+    openingBalance: numeric("opening_balance").default("0"),
+    currentBalance: numeric("current_balance").default("0"),
+    isActive: boolean("is_active").default(true),
+    createdBy: integer("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Bill templates table
+export const billTemplates = pgTable("bill_templates", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    template: jsonb("template").notNull(),
+    isDefault: boolean("is_default").default(false),
+    createdBy: integer("created_by").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Customers table with relation to company and user
@@ -192,6 +386,12 @@ export const selectUserSchema = createSelectSchema(users);
 export const insertCompanySchema = createInsertSchema(companies);
 export const selectCompanySchema = createSelectSchema(companies);
 
+export const insertCompanyMemberSchema = createInsertSchema(companyMembers);
+export const selectCompanyMemberSchema = createSelectSchema(companyMembers);
+
+export const insertProductSchema = createInsertSchema(products);
+export const selectProductSchema = createSelectSchema(products);
+
 export const insertBillSchema = createInsertSchema(bills);
 export const selectBillSchema = createSelectSchema(bills);
 
@@ -213,11 +413,30 @@ export const selectGstTransactionSchema = createSelectSchema(gstTransactions);
 export const insertAiInsightSchema = createInsertSchema(aiInsights);
 export const selectAiInsightSchema = createSelectSchema(aiInsights);
 
+export const insertOfflineSyncSchema = createInsertSchema(offlineSync);
+export const selectOfflineSyncSchema = createSelectSchema(offlineSync);
+
+export const insertNotificationSchema = createInsertSchema(notifications);
+export const selectNotificationSchema = createSelectSchema(notifications);
+
+export const insertFileUploadSchema = createInsertSchema(fileUploads);
+export const selectFileUploadSchema = createSelectSchema(fileUploads);
+
+export const insertLedgerAccountSchema = createInsertSchema(ledgerAccounts);
+export const selectLedgerAccountSchema = createSelectSchema(ledgerAccounts);
+
+export const insertBillTemplateSchema = createInsertSchema(billTemplates);
+export const selectBillTemplateSchema = createSelectSchema(billTemplates);
+
 // Export types for all tables
 export type InsertUsers = typeof users.$inferInsert;
 export type SelectUsers = typeof users.$inferSelect;
 export type InsertCompanies = typeof companies.$inferInsert;
 export type SelectCompanies = typeof companies.$inferSelect;
+export type InsertCompanyMembers = typeof companyMembers.$inferInsert;
+export type SelectCompanyMembers = typeof companyMembers.$inferSelect;
+export type InsertProducts = typeof products.$inferInsert;
+export type SelectProducts = typeof products.$inferSelect;
 export type InsertBills = typeof bills.$inferInsert;
 export type SelectBills = typeof bills.$inferSelect;
 export type InsertPayments = typeof payments.$inferInsert;
@@ -227,22 +446,48 @@ export type SelectAccounts = typeof accounts.$inferSelect;
 export type InsertOTP = typeof otps.$inferInsert;
 export type SelectOTP = typeof otps.$inferSelect;
 export type InsertCustomer = typeof customers.$inferInsert;
+export type SelectCustomer = typeof customers.$inferSelect;
 export type InsertGSTTransaction = typeof gstTransactions.$inferInsert;
 export type SelectGSTTransaction = typeof gstTransactions.$inferSelect;
 export type InsertAIInsight = typeof aiInsights.$inferInsert;
 export type SelectAIInsight = typeof aiInsights.$inferSelect;
+export type InsertOfflineSync = typeof offlineSync.$inferInsert;
+export type SelectOfflineSync = typeof offlineSync.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+export type SelectNotification = typeof notifications.$inferSelect;
+export type InsertFileUpload = typeof fileUploads.$inferInsert;
+export type SelectFileUpload = typeof fileUploads.$inferSelect;
+export type InsertLedgerAccount = typeof ledgerAccounts.$inferInsert;
+export type SelectLedgerAccount = typeof ledgerAccounts.$inferSelect;
+export type InsertBillTemplate = typeof billTemplates.$inferInsert;
+export type SelectBillTemplate = typeof billTemplates.$inferSelect;
+
+// Enum types
 export type RoleEnumType = typeof RoleEnum.enumValues[number];
+export type SubscriptionPlanType = typeof SubscriptionPlanEnum.enumValues[number];
+export type AuthProviderType = typeof AuthProviderEnum.enumValues[number];
+export type NotificationTypeType = typeof NotificationTypeEnum.enumValues[number];
+export type SyncStatusType = typeof SyncStatusEnum.enumValues[number];
+
+// Convenience types
 export type SelectBill = typeof bills.$inferSelect;
 export type SelectCompany = typeof companies.$inferSelect;
 export type SelectPayment = typeof payments.$inferSelect;
+export type SelectUser = typeof users.$inferSelect;
+export type SelectProduct = typeof products.$inferSelect;
 
 // --- Drizzle Relations ---
 export const usersRelations = relations(users, ({ many }) => ({
     companies: many(companies, {
         relationName: "userCompanies"
     }),
+    companyMemberships: many(companyMembers),
     customers: many(customers),
-    payments: many(payments)
+    payments: many(payments),
+    products: many(products),
+    notifications: many(notifications),
+    fileUploads: many(fileUploads),
+    offlineSync: many(offlineSync)
 }));
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -256,12 +501,48 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
         references: [users.id],
         relationName: "updater"
     }),
+    members: many(companyMembers),
     bills: many(bills),
     payments: many(payments),
     customers: many(customers),
+    products: many(products),
     accounts: many(accounts),
     gstTransactions: many(gstTransactions),
-    aiInsights: many(aiInsights)
+    aiInsights: many(aiInsights),
+    notifications: many(notifications),
+    fileUploads: many(fileUploads),
+    ledgerAccounts: many(ledgerAccounts),
+    billTemplates: many(billTemplates)
+}));
+
+export const companyMembersRelations = relations(companyMembers, ({ one }) => ({
+    company: one(companies, {
+        fields: [companyMembers.companyId],
+        references: [companies.id]
+    }),
+    user: one(users, {
+        fields: [companyMembers.userId],
+        references: [users.id]
+    }),
+    inviter: one(users, {
+        fields: [companyMembers.invitedBy],
+        references: [users.id]
+    })
+}));
+
+export const productsRelations = relations(products, ({ one }) => ({
+    company: one(companies, {
+        fields: [products.companyId],
+        references: [companies.id]
+    }),
+    creator: one(users, {
+        fields: [products.createdBy],
+        references: [users.id]
+    }),
+    updater: one(users, {
+        fields: [products.updatedBy],
+        references: [users.id]
+    })
 }));
 
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -284,4 +565,106 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
     bills: many(bills)
 }));
 
-// Repeat similar for bills, payments, etc., relating to users and companies as appropriate
+export const billsRelations = relations(bills, ({ one, many }) => ({
+    customer: one(customers, {
+        fields: [bills.customerId],
+        references: [customers.id]
+    }),
+    company: one(companies, {
+        fields: [bills.companyId],
+        references: [companies.id]
+    }),
+    creator: one(users, {
+        fields: [bills.createdBy],
+        references: [users.id]
+    }),
+    updater: one(users, {
+        fields: [bills.updatedBy],
+        references: [users.id]
+    }),
+    payments: many(payments),
+    gstTransactions: many(gstTransactions)
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+    bill: one(bills, {
+        fields: [payments.billId],
+        references: [bills.id]
+    }),
+    company: one(companies, {
+        fields: [payments.companyId],
+        references: [companies.id]
+    }),
+    user: one(users, {
+        fields: [payments.userId],
+        references: [users.id]
+    }),
+    creator: one(users, {
+        fields: [payments.createdBy],
+        references: [users.id]
+    }),
+    updater: one(users, {
+        fields: [payments.updatedBy],
+        references: [users.id]
+    })
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+    user: one(users, {
+        fields: [notifications.userId],
+        references: [users.id]
+    }),
+    company: one(companies, {
+        fields: [notifications.companyId],
+        references: [companies.id]
+    })
+}));
+
+export const fileUploadsRelations = relations(fileUploads, ({ one }) => ({
+    user: one(users, {
+        fields: [fileUploads.userId],
+        references: [users.id]
+    }),
+    company: one(companies, {
+        fields: [fileUploads.companyId],
+        references: [companies.id]
+    })
+}));
+
+export const offlineSyncRelations = relations(offlineSync, ({ one }) => ({
+    user: one(users, {
+        fields: [offlineSync.userId],
+        references: [users.id]
+    }),
+    company: one(companies, {
+        fields: [offlineSync.companyId],
+        references: [companies.id]
+    })
+}));
+
+export const ledgerAccountsRelations = relations(ledgerAccounts, ({ one, many }) => ({
+    company: one(companies, {
+        fields: [ledgerAccounts.companyId],
+        references: [companies.id]
+    }),
+    creator: one(users, {
+        fields: [ledgerAccounts.createdBy],
+        references: [users.id]
+    }),
+    parent: one(ledgerAccounts, {
+        fields: [ledgerAccounts.parentId],
+        references: [ledgerAccounts.id]
+    }),
+    children: many(ledgerAccounts)
+}));
+
+export const billTemplatesRelations = relations(billTemplates, ({ one }) => ({
+    company: one(companies, {
+        fields: [billTemplates.companyId],
+        references: [companies.id]
+    }),
+    creator: one(users, {
+        fields: [billTemplates.createdBy],
+        references: [users.id]
+    })
+}));
