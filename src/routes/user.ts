@@ -101,7 +101,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // List all users (admin only)
-    fastify.get("/", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (_req: FastifyRequest, reply: FastifyReply) => {
+    fastify.get("/", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (_req: FastifyRequest, reply: FastifyReply) => {
         try {
             const allUsers = await db.select().from(users);
             return { success: true, data: allUsers };
@@ -111,7 +111,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // Get user by id (ADMIN only)
-    fastify.get("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.get("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const { id } = req.params as { id: string };
             const [user] = await db.select().from(users).where(eq(users.id, Number(id)));
@@ -125,7 +125,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // Delete user (ADMIN only)
-    fastify.delete("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (req: FastifyRequest, reply: FastifyReply) => {
+    fastify.delete("/:id", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const { id } = req.params as { id: string };
             const result = await db.delete(users).where(eq(users.id, Number(id)));

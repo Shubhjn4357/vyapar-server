@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { notificationService } from "../services/notificationService";
 import { z } from "zod";
+import { RoleEnum } from "../db/schema";
 
 export default async function (fastify: FastifyInstance) {
     // Get user notifications
@@ -165,7 +166,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Send promotional notification (admin only)
     fastify.post("/promotional", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['ADMIN', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(["admin", "developer"])]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -193,7 +194,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Send system update notification (admin only)
     fastify.post("/system-update", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['ADMIN', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(["admin", "developer"])]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -220,7 +221,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Schedule notification
     fastify.post("/schedule", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['ADMIN', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(["admin", "developer"])]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({

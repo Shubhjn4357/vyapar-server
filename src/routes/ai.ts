@@ -1,11 +1,17 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { aiService } from "../services/aiService";
 import { z } from "zod";
+import { RoleEnum } from "../db/schema";
 
 export default async function (fastify: FastifyInstance) {
+    // Allowed roles for AI endpoints
+    const allowedRoles = RoleEnum.enumValues.filter(r =>
+        ["user", "admin", "manager", "developer"].includes(r)
+    );
+
     // Generate tax optimization insights
     fastify.post("/insights/tax-optimization", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['USER', 'ADMIN', 'MANAGER', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -31,7 +37,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate risk analysis
     fastify.post("/insights/risk-analysis", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['USER', 'ADMIN', 'MANAGER', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -57,7 +63,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate trend analysis
     fastify.post("/insights/trend-analysis", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['USER', 'ADMIN', 'MANAGER', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -83,7 +89,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate expense analysis
     fastify.post("/insights/expense-analysis", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['USER', 'ADMIN', 'MANAGER', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -109,7 +115,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate all insights
     fastify.post("/insights/generate-all", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['USER', 'ADMIN', 'MANAGER', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -135,7 +141,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Get existing insights
     fastify.get("/insights", {
-        preHandler: [fastify.authenticate, fastify.requireRole(['USER', 'ADMIN', 'MANAGER', 'DEVELOPER'])]
+        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({

@@ -26,13 +26,13 @@ export default async function (fastify: FastifyInstance) {
             
             const subscription = req.subscription!;
             let maxCompanies = 1; // free plan
-            if (subscription.planId === 'basic') maxCompanies = 3;
-            if (subscription.planId === 'premium') maxCompanies = 10;
-            
+            if (subscription.plan === 'basic') maxCompanies = 3;
+            if (subscription.plan === 'premium') maxCompanies = 10;
+
             if (userCompanies.length >= maxCompanies) {
                 return reply.code(403).send({
                     status: 'error',
-                    message: `Your ${subscription.planId} plan allows maximum ${maxCompanies} companies. Please upgrade your subscription.`
+                    message: `Your ${subscription.plan} plan allows maximum ${maxCompanies} companies. Please upgrade your subscription.`
                 });
             }
             
@@ -93,7 +93,7 @@ export default async function (fastify: FastifyInstance) {
     });
 
     // Get companies by users (admin only)
-    fastify.get("/user/:userId", { preHandler: [fastify.authenticate, fastify.requireRole("ADMIN")] }, async (req, reply) => {
+    fastify.get("/user/:userId", { preHandler: [fastify.authenticate, fastify.requireRole("admin")] }, async (req, reply) => {
         try {
             const { userId } = req.params as { userId: number };
             const user = await db.select().from(users).where(eq(users.id, userId)).then(r => r[0]);
