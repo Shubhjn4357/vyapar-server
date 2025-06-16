@@ -141,7 +141,7 @@ export class FileUploadService {
                 url: uploadRecord.url || '',
                 size: uploadRecord.size,
                 mimeType: uploadRecord.mimeType,
-                isCompressed: uploadRecord.isCompressed,
+                isCompressed: uploadRecord.isCompressed as boolean,
             };
         } catch (error) {
             console.error('File upload error:', error);
@@ -202,16 +202,20 @@ export class FileUploadService {
 
     async getUserFiles(userId: number, category?: string): Promise<UploadResult[]> {
         try {
-            let query = db
-                .select()
-                .from(fileUploads)
-                .where(eq(fileUploads.userId, userId));
-
+            let files;
             if (category) {
-                query = query.where(and(eq(fileUploads.userId, userId), eq(fileUploads.category, category)));
+                files = await db
+                    .select()
+                    .from(fileUploads)
+                    .where(and(eq(fileUploads.userId, userId), eq(fileUploads.category, category)))
+                    .orderBy(desc(fileUploads.createdAt));
+            } else {
+                files = await db
+                    .select()
+                    .from(fileUploads)
+                    .where(eq(fileUploads.userId, userId))
+                    .orderBy(desc(fileUploads.createdAt));
             }
-
-            const files = await query.orderBy(desc(fileUploads.createdAt));
 
             return files.map(file => ({
                 id: file.id,
@@ -220,7 +224,7 @@ export class FileUploadService {
                 url: file.url || '',
                 size: file.size,
                 mimeType: file.mimeType,
-                isCompressed: file.isCompressed,
+                isCompressed: !!file.isCompressed,
             }));
         } catch (error) {
             console.error('Get user files error:', error);

@@ -7,7 +7,8 @@ export async function generateOTP(mobile: string) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     const [otpRecord] = await db.insert(otps).values({
-        mobile,
+        identifier: mobile,
+        type: 'sms',
         otp,
         expiresAt
     }).returning();
@@ -24,7 +25,7 @@ export async function generateOTP(mobile: string) {
 export async function verifyOTP(mobile: string, otp: string): Promise<boolean> {
     const [otpRecord] = await db.select()
         .from(otps)
-        .where(eq(otps.mobile, mobile))
+        .where(eq(otps.identifier, mobile))
         .orderBy(desc(otps.createdAt))
         .limit(1);
 

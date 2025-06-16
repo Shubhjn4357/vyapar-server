@@ -16,12 +16,12 @@ export default async function (fastify: FastifyInstance) {
                 });
             }
 
-            const buffer = await data.file.toBuffer();
+            const buffer = await data.toBuffer();
             const userId = (req as any).user.id;
             
             // Get additional fields from form data
-            const companyId = data.fields.companyId?.value as string;
-            const category = data.fields.category?.value as string;
+            const companyId = data.fields.companyId as string | undefined;
+            const category = data.fields.category as string | undefined;
 
             const result = await fileUploadService.uploadFile(
                 buffer,

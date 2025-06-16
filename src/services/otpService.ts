@@ -5,7 +5,7 @@ import { otps } from '../db/schema';
 import { eq, and, gt } from 'drizzle-orm';
 
 // Email configuration (using Gmail SMTP - free tier)
-const emailTransporter = nodemailer.createTransporter({
+const emailTransporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
@@ -125,7 +125,7 @@ export class OTPService {
 
     async cleanupExpiredOTPs(): Promise<void> {
         try {
-            await db.delete(otps).where(gt(new Date(), otps.expiresAt));
+            await db.delete(otps).where(gt(otps.expiresAt, new Date()));
         } catch (error) {
             console.error('OTP cleanup error:', error);
         }

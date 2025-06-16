@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { SelectUsers, RoleType, SubscriptionStatusType } from "../db/schema";
+import { SelectUsers, RoleType, SubscriptionStatusType, SubscriptionPlanType } from "../db/schema";
 import { db } from '../db/drizzle';
 import { users, companies } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -29,7 +29,7 @@ export function requireRole(allowedRoles: RoleType[]) {
     };
 }
 
-export function requireSubscription(requiredPlans: string[] = ['free', 'basic', 'premium']) {
+export function requireSubscription(requiredPlans: string[] = ['free', 'basic', 'premium','unlimited']) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
         const user = request.user as any;
         
@@ -51,10 +51,12 @@ export function requireSubscription(requiredPlans: string[] = ['free', 'basic', 
         }
 
         const subscription = userData.subscription as {
-            planId: string;
+            plan: SubscriptionPlanType;
             status: SubscriptionStatusType;
             expiresAt: string;
-        };
+            companiesLimit: number;
+            features: string[];
+        }
 
         // Check if subscription is active
         if (subscription.status !== 'active') {
@@ -73,7 +75,7 @@ export function requireSubscription(requiredPlans: string[] = ['free', 'basic', 
         }
 
         // Check if plan is allowed
-        if (!requiredPlans.includes(subscription.planId)) {
+        if (!requiredPlans.includes(subscription.plan)) {
             return reply.code(403).send({ 
                 status: 'error',
                 message: `This feature requires ${requiredPlans.join(' or ')} subscription` 

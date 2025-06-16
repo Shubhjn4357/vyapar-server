@@ -1,5 +1,5 @@
 import { db } from '../db/drizzle';
-import { offlineSync, bills, customers, products, payments } from '../db/schema';
+import { offlineSync, bills, customers, products, payments, SyncStatusEnum } from '../db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 
 export interface SyncOperation {
@@ -8,7 +8,7 @@ export interface SyncOperation {
     recordId: string;
     operation: 'create' | 'update' | 'delete';
     data: any;
-    status: 'pending' | 'synced' | 'failed' | 'conflict';
+    status: typeof SyncStatusEnum.enumValues[number];
     deviceId?: string;
     conflictData?: any;
 }
@@ -52,27 +52,25 @@ export class OfflineSyncService {
 
     async getPendingSyncOperations(userId: number, companyId?: string): Promise<SyncOperation[]> {
         try {
-            let query = db
-                .select()
-                .from(offlineSync)
-                .where(
-                    and(
-                        eq(offlineSync.userId, userId),
-                        eq(offlineSync.status, 'pending')
-                    )
-                );
-
+            let filter;
             if (companyId) {
-                query = query.where(
-                    and(
-                        eq(offlineSync.userId, userId),
-                        eq(offlineSync.companyId, companyId),
-                        eq(offlineSync.status, 'pending')
-                    )
+                filter = and(
+                    eq(offlineSync.userId, userId),
+                    eq(offlineSync.companyId, companyId),
+                    eq(offlineSync.status, 'pending')
+                );
+            } else {
+                filter = and(
+                    eq(offlineSync.userId, userId),
+                    eq(offlineSync.status, 'pending')
                 );
             }
 
-            const operations = await query.orderBy(offlineSync.createdAt);
+            const operations = await db
+                .select()
+                .from(offlineSync)
+                .where(filter)
+                .orderBy(offlineSync.createdAt);
 
             return operations.map(op => ({
                 id: op.id,
@@ -468,21 +466,20 @@ export class OfflineSyncService {
         conflicts: number;
     }> {
         try {
-            let baseQuery = db
-                .select()
-                .from(offlineSync)
-                .where(eq(offlineSync.userId, userId));
-
+            let filter;
             if (companyId) {
-                baseQuery = baseQuery.where(
-                    and(
-                        eq(offlineSync.userId, userId),
-                        eq(offlineSync.companyId, companyId)
-                    )
+                filter = and(
+                    eq(offlineSync.userId, userId),
+                    eq(offlineSync.companyId, companyId)
                 );
+            } else {
+                filter = eq(offlineSync.userId, userId);
             }
 
-            const allOperations = await baseQuery;
+            const allOperations = await db
+                .select()
+                .from(offlineSync)
+                .where(filter);
 
             const status = {
                 pending: 0,

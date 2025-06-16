@@ -1,3 +1,4 @@
+import { RoleEnum, SubscriptionPlanEnum, SubscriptionPlanType, SubscriptionStatusEnum, RoleType } from './../db/schema';
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { db } from "../db/drizzle";
 import { users } from '../db/schema';
@@ -23,16 +24,18 @@ export default async function (fastify: FastifyInstance) {
 
             const hash = await bcrypt.hash(data.password, 10);
             const subscription = {
-                planId: "free",
-                status: "active" as "active",
-                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                plan: SubscriptionPlanEnum.enumValues[0] as SubscriptionPlanType,
+                status: SubscriptionStatusEnum.enumValues[0],
+                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                companiesLimit: 1,
+                features: ["basic_billing"]
             };
             const [user] = await db.insert(users).values({
                 mobile: data.mobile,
                 email: data.email,
                 password: hash,
                 name: data.name,
-                role: "USER",
+                role: RoleEnum.enumValues[1] as RoleType,
                 subscription
             }).returning({mobile:users.mobile, id: users.id, role: users.role, name: users.name, email: users.email, subscription: users.subscription});
             if (!user) {
@@ -112,14 +115,16 @@ export default async function (fastify: FastifyInstance) {
             let [user] = await db.select().from(users).where(eq(users.googleId, googleId));
             if (!user) {
                 const subscription = {
-                    planId: "free",
-                    status: "active" as "active",
-                    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                    plan: SubscriptionPlanEnum.enumValues[0],
+                    status: SubscriptionStatusEnum.enumValues[0],
+                    expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                    companiesLimit: 1,
+                    features: ["basic_billing"]
                 };
                 [user] = await db.insert(users).values({
                     mobile: phone ?? "",
                     name,
-                    role: "USER",
+                    role: "user",
                     subscription,
                     email,
                 }).returning();
@@ -168,11 +173,13 @@ export default async function (fastify: FastifyInstance) {
             if (!user) {
                 [user] = await db.insert(users).values({
                     mobile,
-                    role: "USER",
+                    role: "user",
                     subscription: {
-                        planId: "free",
+                        plan: "free",
                         status: "active",
-                        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                        companiesLimit: 1,
+                        features: ["basic_billing"]
                     },
                    
                 }).returning();
@@ -195,23 +202,49 @@ export default async function (fastify: FastifyInstance) {
 
             let [user] = await db.select().from(users).where(eq(users.facebookId, fbUser.id));
             const isNewUser = !user;
-
+            const subscription = {
+                plan: SubscriptionPlanEnum.enumValues[0],
+                status: SubscriptionStatusEnum.enumValues[0],
+                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                companiesLimit: 1,
+                features: ["basic_billing"]
+            };
             if (!user) {
                 [user] = await db.insert(users).values({
                     mobile: fbUser.phone ?? "",
                     email: fbUser.email,
                     name: fbUser.name,
-                    role: "USER",
-                    subscription: {
-                        planId: "free",
-                        status: "active",
-                        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-                    },
+                    role: "user",
+                    subscription,
                 }).returning();
+            } else if (!user.facebookId) {
+                // Link existing account with Facebook
+                [user] = await db.update(users)
+                    .set({
+                        facebookId: fbUser.id,
+                        avatar: user.avatar || fbUser.picture?.data?.url
+                    })
+                    .where(eq(users.id, user.id))
+                    .returning();
             }
 
+            // Update last login
+            await db.update(users)
+                .set({ lastLoginAt: new Date() })
+                .where(eq(users.id, user.id));
+
             const token = signJwt({ id: user.id, role: user.role });
-            reply.send({ token, user, isNewUser, socialProfile: fbUser });
+
+            reply.send({
+                status: 'success',
+                data: {
+                    token,
+                    user,
+                    isNewUser,
+                    socialProfile: fbUser
+                },
+                message: 'Facebook authentication successful'
+            });
         } catch (err: any) {
             reply.code(400).send({ error: err.message || "Facebook login failed" });
         }
@@ -259,7 +292,7 @@ export default async function (fastify: FastifyInstance) {
             const [guestUser] = await db.insert(users).values({
                 name: `Guest_${Date.now()}`,
                 isGuest: true,
-                role: "GUEST",
+                role: "guest",
                 authProvider: "email",
                 deviceInfo,
                 subscription: {
@@ -322,7 +355,7 @@ export default async function (fastify: FastifyInstance) {
                     isEmailVerified: googleUser.email_verified,
                     isProfileComplete: true,
                     avatar: googleUser.picture,
-                    role: "USER",
+                    role: "user",
                     subscription: {
                         plan: "free",
                         status: "active",
@@ -400,7 +433,7 @@ export default async function (fastify: FastifyInstance) {
                     isEmailVerified: !!facebookUser.email,
                     isProfileComplete: true,
                     avatar: facebookUser.picture?.data?.url,
-                    role: "USER",
+                    role: "user",
                     subscription: {
                         plan: "free",
                         status: "active",
@@ -555,7 +588,7 @@ export default async function (fastify: FastifyInstance) {
                 [user] = await db.insert(users).values({
                     mobile,
                     isMobileVerified: true,
-                    role: "USER",
+                    role: "user",
                     authProvider: "email",
                     subscription: {
                         plan: "free",
@@ -644,7 +677,7 @@ export default async function (fastify: FastifyInstance) {
                 email: data.email,
                 mobile: data.mobile,
                 isGuest: false,
-                role: "USER",
+                role: "user",
                 isProfileComplete: true,
                 subscription: {
                     plan: "free",

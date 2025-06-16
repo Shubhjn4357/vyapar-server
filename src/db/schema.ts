@@ -4,13 +4,20 @@ import { relations } from 'drizzle-orm';
 
 // Role enum (use lowercase for consistency)
 export const RoleEnum = pgEnum("role_enum", [
-    "GUEST",
-    "USER", 
-    "STAFF",
-    "MANAGER",
-    "ADMIN",
-    "DEVELOPER"
+    "guest",
+    "user", 
+    "staff",
+    "manager",
+    "admin",
+    "developer"
 ]);
+export const LedgerTypeEnum = pgEnum("ledger_type_enum", [
+    "asset",
+    "liability",
+    "equity",
+    "income",
+    "expense"
+])
 export const SubscriptionStatusEnum = pgEnum("subscription_status_enum", [
     "active",
     "expired",
@@ -47,6 +54,12 @@ export const SyncStatusEnum = pgEnum("sync_status_enum", [
     "failed",
     "conflict"
 ]);
+
+// Enum types
+export type SubscriptionPlanType = typeof SubscriptionPlanEnum.enumValues[number];
+export type AuthProviderType = typeof AuthProviderEnum.enumValues[number];
+export type NotificationTypeType = typeof NotificationTypeEnum.enumValues[number];
+export type SyncStatusType = typeof SyncStatusEnum.enumValues[number];
 export type SubscriptionStatusType  = typeof SubscriptionStatusEnum.enumValues[number];
 export type RoleType = typeof RoleEnum.enumValues[number];
 export type SalesType = typeof SalesTypeEnum.enumValues[number];
@@ -70,7 +83,7 @@ export const users = pgTable("users", {
     email: text("email"),
     mobile: text("mobile"),
     password: text("password"),
-    role: RoleEnum("role").default("USER").notNull(),
+    role: RoleEnum("role").default("user").notNull(),
     authProvider: AuthProviderEnum("auth_provider").default("email").notNull(),
     googleId: text("google_id"),
     facebookId: text("facebook_id"),
@@ -96,14 +109,14 @@ export const users = pgTable("users", {
         animations: true
     }),
     subscription: jsonb("subscription").$type<{
-        plan: 'free' | 'basic' | 'premium' | 'unlimited';
+        plan: SubscriptionPlanType;
         status: SubscriptionStatusType;
         expiresAt: string;
         companiesLimit: number;
         features: string[];
     }>().default({
-        plan: 'free',
-        status: 'active',
+        plan: SubscriptionPlanEnum.enumValues[0],
+        status: SubscriptionStatusEnum.enumValues[0],
         expiresAt: '',
         companiesLimit: 1,
         features: []
@@ -129,7 +142,7 @@ export const companyMembers = pgTable("company_members", {
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
     userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    role: RoleEnum("role").default("STAFF").notNull(),
+    role: RoleEnum("role").default("staff").notNull(),
     permissions: jsonb("permissions").$type<{
         canCreateBills: boolean;
         canEditBills: boolean;
@@ -236,9 +249,8 @@ export const ledgerAccounts = pgTable("ledger_accounts", {
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
     code: varchar("code", { length: 50 }),
-    type: varchar("type", { length: 50 }).notNull(), // 'asset', 'liability', 'equity', 'income', 'expense'
+    type: LedgerTypeEnum("type").notNull(), // 'asset', 'liability', 'equity', 'income', 'expense'
     subType: varchar("sub_type", { length: 50 }),
-    parentId: uuid("parent_id").references(() => ledgerAccounts.id),
     openingBalance: numeric("opening_balance").default("0"),
     currentBalance: numeric("current_balance").default("0"),
     isActive: boolean("is_active").default(true),
@@ -462,12 +474,6 @@ export type SelectLedgerAccount = typeof ledgerAccounts.$inferSelect;
 export type InsertBillTemplate = typeof billTemplates.$inferInsert;
 export type SelectBillTemplate = typeof billTemplates.$inferSelect;
 
-// Enum types
-export type RoleEnumType = typeof RoleEnum.enumValues[number];
-export type SubscriptionPlanType = typeof SubscriptionPlanEnum.enumValues[number];
-export type AuthProviderType = typeof AuthProviderEnum.enumValues[number];
-export type NotificationTypeType = typeof NotificationTypeEnum.enumValues[number];
-export type SyncStatusType = typeof SyncStatusEnum.enumValues[number];
 
 // Convenience types
 export type SelectBill = typeof bills.$inferSelect;
@@ -651,10 +657,6 @@ export const ledgerAccountsRelations = relations(ledgerAccounts, ({ one, many })
         fields: [ledgerAccounts.createdBy],
         references: [users.id]
     }),
-    parent: one(ledgerAccounts, {
-        fields: [ledgerAccounts.parentId],
-        references: [ledgerAccounts.id]
-    }),
     children: many(ledgerAccounts)
 }));
 
@@ -668,3 +670,4 @@ export const billTemplatesRelations = relations(billTemplates, ({ one }) => ({
         references: [users.id]
     })
 }));
+

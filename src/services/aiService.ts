@@ -273,17 +273,20 @@ export class AIService {
 
     async getInsights(companyId: string, type?: string): Promise<AIInsightData[]> {
         try {
-            const query = db
-                .select()
-                .from(aiInsights)
-                .where(eq(aiInsights.companyId, companyId))
-                .orderBy(desc(aiInsights.createdAt));
-
+            let filter;
             if (type) {
-                query.where(and(eq(aiInsights.companyId, companyId), eq(aiInsights.type, type as any)));
+                filter = and(eq(aiInsights.companyId, companyId), eq(aiInsights.type, type as any));
+            } else {
+                filter = eq(aiInsights.companyId, companyId);
             }
 
-            const insights = await query.limit(10);
+            const insights = await db
+                .select()
+                .from(aiInsights)
+                .where(filter)
+                .orderBy(desc(aiInsights.createdAt))
+                .limit(10);
+
             return insights.map(insight => insight.data as AIInsightData);
         } catch (error) {
             console.error('Get insights error:', error);

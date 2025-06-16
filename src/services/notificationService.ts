@@ -50,21 +50,20 @@ export class NotificationService {
         offset: number = 0
     ): Promise<any[]> {
         try {
-            let query = db
-                .select()
-                .from(notifications)
-                .where(eq(notifications.userId, userId));
-
+            let filter;
             if (companyId) {
-                query = query.where(
-                    and(
-                        eq(notifications.userId, userId),
-                        eq(notifications.companyId, companyId)
-                    )
+                filter = and(
+                    eq(notifications.userId, userId),
+                    eq(notifications.companyId, companyId)
                 );
+            } else {
+                filter = eq(notifications.userId, userId);
             }
 
-            const userNotifications = await query
+            const userNotifications = await db
+                .select()
+                .from(notifications)
+                .where(filter)
                 .orderBy(desc(notifications.createdAt))
                 .limit(limit)
                 .offset(offset);
@@ -97,21 +96,20 @@ export class NotificationService {
 
     async markAllAsRead(userId: number, companyId?: string): Promise<boolean> {
         try {
-            let query = db
-                .update(notifications)
-                .set({ isRead: true })
-                .where(eq(notifications.userId, userId));
-
+            let filter;
             if (companyId) {
-                query = query.where(
-                    and(
-                        eq(notifications.userId, userId),
-                        eq(notifications.companyId, companyId)
-                    )
+                filter = and(
+                    eq(notifications.userId, userId),
+                    eq(notifications.companyId, companyId)
                 );
+            } else {
+                filter = eq(notifications.userId, userId);
             }
 
-            await query;
+            await db
+                .update(notifications)
+                .set({ isRead: true })
+                .where(filter);
             return true;
         } catch (error) {
             console.error('Mark all notifications as read error:', error);
@@ -121,27 +119,25 @@ export class NotificationService {
 
     async getUnreadCount(userId: number, companyId?: string): Promise<number> {
         try {
-            let query = db
-                .select()
-                .from(notifications)
-                .where(
-                    and(
-                        eq(notifications.userId, userId),
-                        eq(notifications.isRead, false)
-                    )
-                );
-
+            let filter;
             if (companyId) {
-                query = query.where(
-                    and(
-                        eq(notifications.userId, userId),
-                        eq(notifications.companyId, companyId),
-                        eq(notifications.isRead, false)
-                    )
+                filter = and(
+                    eq(notifications.userId, userId),
+                    eq(notifications.companyId, companyId),
+                    eq(notifications.isRead, false)
+                );
+            } else {
+                filter = and(
+                    eq(notifications.userId, userId),
+                    eq(notifications.isRead, false)
                 );
             }
 
-            const unreadNotifications = await query;
+            const unreadNotifications = await db
+                .select()
+                .from(notifications)
+                .where(filter);
+
             return unreadNotifications.length;
         } catch (error) {
             console.error('Get unread count error:', error);
