@@ -166,7 +166,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Send promotional notification (admin only)
     fastify.post("/promotional", {
-        preHandler: [fastify.authenticate, fastify.requireRole(["admin", "developer"])]
+        preHandler: [fastify.authenticate, fastify.requireRole("admin")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -194,7 +194,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Send system update notification (admin only)
     fastify.post("/system-update", {
-        preHandler: [fastify.authenticate, fastify.requireRole(["admin", "developer"])]
+        preHandler: [fastify.authenticate, fastify.requireRole("admin")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -221,7 +221,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Schedule notification
     fastify.post("/schedule", {
-        preHandler: [fastify.authenticate, fastify.requireRole(["admin", "developer"])]
+        preHandler: [fastify.authenticate, fastify.requireRole("admin")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({

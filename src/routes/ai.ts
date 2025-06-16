@@ -11,7 +11,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate tax optimization insights
     fastify.post("/insights/tax-optimization", {
-        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
+        preHandler: [fastify.authenticate, fastify.requireRole("user")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -37,7 +37,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate risk analysis
     fastify.post("/insights/risk-analysis", {
-        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
+        preHandler: [fastify.authenticate, fastify.requireRole("user")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -63,7 +63,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate trend analysis
     fastify.post("/insights/trend-analysis", {
-        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
+        preHandler: [fastify.authenticate, fastify.requireRole("user")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -89,7 +89,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate expense analysis
     fastify.post("/insights/expense-analysis", {
-        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
+        preHandler: [fastify.authenticate, fastify.requireRole("user")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -115,7 +115,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Generate all insights
     fastify.post("/insights/generate-all", {
-        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
+        preHandler: [fastify.authenticate, fastify.requireRole("user")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
@@ -141,7 +141,7 @@ export default async function (fastify: FastifyInstance) {
 
     // Get existing insights
     fastify.get("/insights", {
-        preHandler: [fastify.authenticate, fastify.requireRole(allowedRoles)]
+        preHandler: [fastify.authenticate, fastify.requireRole("user")]
     }, async (req: FastifyRequest, reply: FastifyReply) => {
         try {
             const schema = z.object({
