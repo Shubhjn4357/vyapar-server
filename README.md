@@ -1,5 +1,6 @@
 # Vyapar Server
 
+🔥Download The App :`https://expo.dev/artifacts/eas/pt7wuM3mxQj3tZYoV2cMHj.apk`
 A comprehensive business management API server built with Fastify, TypeScript, and Drizzle ORM. This server provides robust backend services for the Vyapar mobile application, handling authentication, company management, billing, inventory, and more.
 
 ## 🚀 Features
