@@ -461,4 +461,223 @@ export default async function (fastify: FastifyInstance) {
             });
         }
     });
+
+    // Get Profit & Loss Report
+    fastify.get("/profit-loss", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const querySchema = z.object({
+                startDate: z.string().optional(),
+                endDate: z.string().optional(),
+                companyId: z.string().optional()
+            });
+
+            const params = querySchema.parse(req.query);
+            let whereConditions = [];
+
+            if (params.companyId) whereConditions.push(eq(bills.companyId, params.companyId));
+            if (params.startDate) whereConditions.push(gte(bills.date, new Date(params.startDate)));
+            if (params.endDate) whereConditions.push(lte(bills.date, new Date(params.endDate)));
+
+            const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+            // Get sales revenue
+            const [salesData] = await db.select({
+                totalSales: sum(sql`CASE WHEN ${bills.billType} = 'SALES' THEN ${bills.totalAmount} ELSE 0 END`),
+                totalCost: sum(sql`CASE WHEN ${bills.billType} = 'PURCHASE' THEN ${bills.totalAmount} ELSE 0 END`)
+            }).from(bills).where(whereClause);
+
+            const revenue = Number(salesData?.totalSales) || 0;
+            const costOfGoods = Number(salesData?.totalCost) || 0;
+            const grossProfit = revenue - costOfGoods;
+            const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
+            // Mock operating expenses (would come from expense tracking)
+            const operatingExpenses = revenue * 0.15; // 15% of revenue
+            const operatingProfit = grossProfit - operatingExpenses;
+
+            // Mock taxes (would be calculated based on GST)
+            const taxes = operatingProfit > 0 ? operatingProfit * 0.30 : 0;
+            const netProfit = operatingProfit - taxes;
+            const netMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+            return reply.send({
+                status: 'success',
+                data: {
+                    revenue,
+                    costOfGoods,
+                    grossProfit,
+                    grossMargin: Math.round(grossMargin * 100) / 100,
+                    operatingExpenses,
+                    operatingProfit,
+                    taxes,
+                    netProfit,
+                    netMargin: Math.round(netMargin * 100) / 100,
+                    summary: {
+                        period: params.startDate && params.endDate
+                            ? `${params.startDate} to ${params.endDate}`
+                            : 'Current Period',
+                        status: netProfit > 0 ? 'profitable' : 'loss',
+                    }
+                }
+            });
+        } catch (error: any) {
+            return reply.code(500).send({
+                status: 'error',
+                message: error.message || "Failed to fetch P&L report"
+            });
+        }
+    });
+
+    // Get Tax Report
+    fastify.get("/tax", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const querySchema = z.object({
+                startDate: z.string().optional(),
+                endDate: z.string().optional(),
+                period: z.string().optional(),
+                companyId: z.string().optional()
+            });
+
+            const params = querySchema.parse(req.query);
+
+            let startDate: Date;
+            let endDate: Date;
+
+            if (params.period) {
+                const [year, month] = params.period.split('-');
+                startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                endDate = new Date(parseInt(year), parseInt(month), 0);
+            } else {
+                startDate = params.startDate ? new Date(params.startDate) : new Date();
+                endDate = params.endDate ? new Date(params.endDate) : new Date();
+            }
+
+            const whereConditions = [
+                gte(gstTransactions.date, startDate),
+                lte(gstTransactions.date, endDate)
+            ];
+
+            if (params.companyId) {
+                whereConditions.push(eq(gstTransactions.companyId, params.companyId));
+            }
+
+            const [gstData] = await db.select({
+                outwardTax: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.totalTax} ELSE 0 END`),
+                inwardTax: sum(sql`CASE WHEN ${gstTransactions.type} = 'purchase' THEN ${gstTransactions.totalTax} ELSE 0 END`),
+                cgstLiability: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.cgst} ELSE 0 END`),
+                sgstLiability: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.sgst} ELSE 0 END`),
+                igstLiability: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.igst} ELSE 0 END`)
+            }).from(gstTransactions).where(and(...whereConditions));
+
+            const outwardTax = Number(gstData?.outwardTax) || 0;
+            const inwardTax = Number(gstData?.inwardTax) || 0;
+            const netLiability = outwardTax - inwardTax;
+
+            return reply.send({
+                status: 'success',
+                data: {
+                    period: params.period || `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+                    gst: {
+                        outwardSupplies: {
+                            tax: outwardTax,
+                            cgst: Number(gstData?.cgstLiability) || 0,
+                            sgst: Number(gstData?.sgstLiability) || 0,
+                            igst: Number(gstData?.igstLiability) || 0
+                        },
+                        inwardSupplies: {
+                            tax: inwardTax,
+                            itcAvailable: inwardTax
+                        },
+                        netLiability,
+                        refundable: Math.max(0, inwardTax - outwardTax)
+                    },
+                    summary: {
+                        totalTaxCollected: outwardTax,
+                        totalTaxPaid: inwardTax,
+                        netTaxPayable: Math.max(0, netLiability),
+                        filingStatus: 'pending'
+                    }
+                }
+            });
+        } catch (error: any) {
+            return reply.code(500).send({
+                status: 'error',
+                message: error.message || "Failed to fetch tax report"
+            });
+        }
+    });
+
+    // Get Cash Flow Report
+    fastify.get("/cash-flow", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const querySchema = z.object({
+                startDate: z.string().optional(),
+                endDate: z.string().optional(),
+                companyId: z.string().optional()
+            });
+
+            const params = querySchema.parse(req.query);
+            let whereConditions = [];
+
+            if (params.companyId) whereConditions.push(eq(bills.companyId, params.companyId));
+            if (params.startDate) whereConditions.push(gte(bills.date, new Date(params.startDate)));
+            if (params.endDate) whereConditions.push(lte(bills.date, new Date(params.endDate)));
+
+            const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+            // Get cash inflows (paid bills)
+            const [inflowData] = await db.select({
+                paidSales: sum(sql`CASE WHEN ${bills.billType} = 'SALES' AND ${bills.paymentStatus} = 'paid' THEN ${bills.totalAmount} ELSE 0 END`)
+            }).from(bills).where(whereClause);
+
+            // Get cash outflows (paid purchases)
+            const [outflowData] = await db.select({
+                paidPurchases: sum(sql`CASE WHEN ${bills.billType} = 'PURCHASE' AND ${bills.paymentStatus} = 'paid' THEN ${bills.totalAmount} ELSE 0 END`)
+            }).from(bills).where(whereClause);
+
+            const cashInflows = Number(inflowData?.paidSales) || 0;
+            const cashOutflows = Number(outflowData?.paidPurchases) || 0;
+            const netCashFlow = cashInflows - cashOutflows;
+
+            // Get pending amounts
+            const [pendingData] = await db.select({
+                pendingSales: sum(sql`CASE WHEN ${bills.billType} = 'SALES' AND ${bills.paymentStatus} IN ('pending', 'partial') THEN ${bills.totalAmount} ELSE 0 END`),
+                pendingPurchases: sum(sql`CASE WHEN ${bills.billType} = 'PURCHASE' AND ${bills.paymentStatus} IN ('pending', 'partial') THEN ${bills.totalAmount} ELSE 0 END`)
+            }).from(bills).where(whereClause);
+
+            const pendingInflows = Number(pendingData?.pendingSales) || 0;
+            const pendingOutflows = Number(pendingData?.pendingPurchases) || 0;
+
+            return reply.send({
+                status: 'success',
+                data: {
+                    period: params.startDate && params.endDate
+                        ? `${params.startDate} to ${params.endDate}`
+                        : 'Current Period',
+                    operatingActivities: {
+                        cashInflows,
+                        cashOutflows,
+                        netCashFlow
+                    },
+                    pending: {
+                        inflowsPending: pendingInflows,
+                        outflowsPending: pendingOutflows,
+                        netPending: pendingInflows - pendingOutflows
+                    },
+                    projectedCashFlow: netCashFlow + (pendingInflows - pendingOutflows),
+                    summary: {
+                        totalCashCollected: cashInflows,
+                        totalCashPaid: cashOutflows,
+                        netCashPosition: netCashFlow,
+                        collectionsRatio: cashInflows > 0 ? (cashInflows / (cashInflows + pendingInflows) * 100) : 0
+                    }
+                }
+            });
+        } catch (error: any) {
+            return reply.code(500).send({
+                status: 'error',
+                message: error.message || "Failed to fetch cash flow report"
+            });
+        }
+    });
 }

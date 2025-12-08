@@ -322,6 +322,7 @@ export const bills = pgTable("bills", {
     igst: numeric("igst").default("0"),
     discount: numeric("discount").default("0"),
     discountType: varchar("discount_type", { length: 16 }).default("amount"),
+    billType: varchar("bill_type", { length: 16 }).notNull().default("SALES"),
     createdBy: integer("created_by").references(() => users.id), // FK to users
     updatedBy: integer("updated_by").references(() => users.id), // FK to users
     createdAt: timestamp("created_at").defaultNow(),

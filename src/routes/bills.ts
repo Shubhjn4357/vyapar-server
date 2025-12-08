@@ -1,8 +1,9 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/drizzle";
-import { bills, insertBillSchema, selectBillSchema, customers, payments } from '../db/schema';
+import { bills, insertBillSchema, selectBillSchema, customers, payments, gstTransactions } from '../db/schema';
 import { eq, and, gte, lte, like, desc, asc, count, sum, sql } from "drizzle-orm";
 import { z } from "zod";
+import { GSTCalculator } from "../services/gstCalculator";
 
 export default async function (fastify: FastifyInstance) {
     // Helper function to generate bill number
@@ -90,15 +91,17 @@ export default async function (fastify: FastifyInstance) {
     fastify.post("/", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
             const createBillSchema = z.object({
-                customerId: z.string(),
+                billType: z.enum(['SALES', 'PURCHASE']),
+                customerId: z.string().optional(),
                 customerName: z.string(),
                 customerGstin: z.string().optional(),
                 customerAddress: z.string().optional(),
                 customerPhone: z.string().optional(),
                 customerEmail: z.string().optional(),
-                date: z.string(),
+                date: z.string().optional(),
                 dueDate: z.string(),
                 items: z.array(z.object({
+                    id: z.string().optional(),
                     name: z.string(),
                     description: z.string().optional(),
                     quantity: z.number(),
@@ -112,6 +115,12 @@ export default async function (fastify: FastifyInstance) {
                 })),
                 notes: z.string().optional(),
                 terms: z.string().optional(),
+                amount: z.number(),
+                taxAmount: z.number(),
+                totalAmount: z.number(),
+                cgst: z.number().optional(),
+                sgst: z.number().optional(),
+                igst: z.number().optional(),
                 discount: z.number().optional(),
                 discountType: z.enum(['percentage', 'amount']).optional(),
                 companyId: z.string()
@@ -120,22 +129,49 @@ export default async function (fastify: FastifyInstance) {
             const data = createBillSchema.parse(req.body);
             const billNumber = await generateBillNumber(data.companyId);
             
-            // Calculate amounts
-            const amount = data.items.reduce((sum, item) => sum + item.amount, 0);
-            const taxAmount = data.items.reduce((sum, item) => sum + item.taxAmount, 0);
-            let totalAmount = amount + taxAmount;
+            // Validate totals
+            let amount = data.amount || data.items.reduce((sum, item) => sum + item.amount, 0);
+            let taxAmount = data.taxAmount || data.items.reduce((sum, item) => sum + item.taxAmount, 0);
+            let totalAmount = data.totalAmount || (amount + taxAmount);
             
-            if (data.discount) {
+            // Apply discount if provided
+            if (data.discount && data.discount > 0) {
                 if (data.discountType === 'percentage') {
-                    totalAmount -= (totalAmount * data.discount / 100);
+                    const discountAmount = amount * (data.discount / 100);
+                    amount -= discountAmount;
+                    totalAmount = amount + taxAmount;
                 } else {
-                    totalAmount -= data.discount;
+                    amount -= data.discount;
+                    totalAmount = amount + taxAmount;
                 }
+            }
+
+            // Calculate GST breakdown if not provided
+            let cgst = data.cgst || 0;
+            let sgst = data.sgst || 0;
+            let igst = data.igst || 0;
+
+            if (data.billType === 'SALES' && (cgst === 0 && sgst === 0 && igst === 0)) {
+                const gstRate = 18; // Default - should be configurable per item
+                const isInterState = data.customerGstin ?
+                    GSTCalculator.validateGSTIN(data.customerGstin) : false;
+
+                const gstBreakdown = GSTCalculator.calculateGST({
+                    amount,
+                    gstRate,
+                    isInterState,
+                    reverseCharge: false,
+                });
+
+                cgst = gstBreakdown.cgstAmount;
+                sgst = gstBreakdown.sgstAmount;
+                igst = gstBreakdown.igstAmount;
             }
             
             const billData = {
                 billNumber,
-                customerId: data.customerId,
+                billType: data.billType,
+                customerId: data.customerId || '',
                 customerName: data.customerName,
                 customerGstin: data.customerGstin,
                 customerAddress: data.customerAddress,
@@ -144,27 +180,61 @@ export default async function (fastify: FastifyInstance) {
                 amount: amount.toString(),
                 taxAmount: taxAmount.toString(),
                 totalAmount: totalAmount.toString(),
-                date: new Date(data.date),
+                date: new Date(data.date || new Date()),
                 dueDate: new Date(data.dueDate),
-                items: data.items,
+                items: JSON.stringify(data.items),
                 status: 'draft' as const,
                 paymentStatus: 'pending' as const,
                 notes: data.notes,
                 terms: data.terms,
                 companyId: data.companyId,
-                discount: data.discount?.toString(),
-                discountType: data.discountType,
+                cgst: cgst.toString(),
+                sgst: sgst.toString(),
+                igst: igst.toString(),
+                discount: data.discount?.toString() || '0',
+                discountType: data.discountType || 'percentage',
                 createdBy: (req.user as any).id,
                 updatedBy: (req.user as any).id
             };
             
             const inserted = await db.insert(bills).values(billData).returning().then(r => r[0]);
+
+            // Create corresponding GST transaction if sales bill
+            if (data.billType === 'SALES') {
+                const gstTransactionData = {
+                    companyId: data.companyId,
+                    billId: inserted.id,
+                    type: 'sale' as const,
+                    date: new Date(data.date || new Date()),
+                    partyName: data.customerName,
+                    partyGstin: data.customerGstin,
+                    taxableAmount: amount.toString(),
+                    totalTax: taxAmount.toString(),
+                    cgst: cgst.toString(),
+                    sgst: sgst.toString(),
+                    igst: igst.toString(),
+                    total: totalAmount.toString(),
+                    items: JSON.stringify(data.items),
+                    placeOfSupply: data.customerAddress,
+                    reverseCharge: false,
+                };
+
+                await db.insert(gstTransactions).values(gstTransactionData);
+            }
+
             return reply.code(201).send({ 
                 status: 'success', 
                 data: inserted,
                 message: 'Bill created successfully'
             });
         } catch (error: any) {
+            if (error instanceof z.ZodError) {
+                return reply.code(400).send({
+                    status: 'error',
+                    message: 'Invalid bill data',
+                    errors: error.errors
+                });
+            }
             return reply.code(400).send({ 
                 status: 'error', 
                 message: error.message || "Failed to create bill" 

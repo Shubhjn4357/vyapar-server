@@ -3,6 +3,7 @@ import { db } from "../db/drizzle";
 import { gstTransactions, insertGstTransactionSchema, selectGstTransactionSchema, bills } from "../db/schema";
 import { eq, and, gte, lte, desc, count, sum, sql } from "drizzle-orm";
 import { z } from "zod";
+import { GSTCalculator, GSTCalculationParams } from "../services/gstCalculator";
 
 export default async function (fastify: FastifyInstance) {
     // Get GST transactions with pagination and filters
@@ -92,13 +93,63 @@ export default async function (fastify: FastifyInstance) {
     fastify.post("/transactions", { preHandler: [fastify.authenticate] }, async (req, reply) => {
         try {
             const data = insertGstTransactionSchema.parse(req.body);
-            const inserted = await db.insert(gstTransactions).values(data).returning().then(r => r[0]);
+
+            // Calculate GST if not already provided
+            let cgst = data.cgst || 0;
+            let sgst = data.sgst || 0;
+            let igst = data.igst || 0;
+            let totalTax = data.totalTax || 0;
+
+            // If GST values not provided, calculate them
+            if (!totalTax && data.taxableAmount) {
+                const gstRate = 18; // Default to 18%, should be configurable
+                const isInterState = data.type === 'sale' && (data.placeOfSupply?.toLowerCase() !== 'intrastate');
+
+                const gstBreakdown = GSTCalculator.calculateGST({
+                    amount: Number(data.taxableAmount),
+                    gstRate,
+                    isInterState: isInterState || false,
+                    reverseCharge: data.reverseCharge || false,
+                });
+
+                cgst = gstBreakdown.cgstAmount;
+                sgst = gstBreakdown.sgstAmount;
+                igst = gstBreakdown.igstAmount;
+                totalTax = gstBreakdown.totalTaxAmount;
+            }
+
+            // Validate total amount calculation
+            const calculatedTotal = Number(data.taxableAmount) + Number(totalTax);
+            if (Math.abs(calculatedTotal - Number(data.total)) > 1) {
+                return reply.code(400).send({
+                    status: 'error',
+                    message: 'Total amount mismatch with calculated tax'
+                });
+            }
+
+            const transactionData = {
+                ...data,
+                cgst: cgst.toString(),
+                sgst: sgst.toString(),
+                igst: igst.toString(),
+                totalTax: totalTax.toString(),
+            };
+
+            const inserted = await db.insert(gstTransactions).values(transactionData).returning().then(r => r[0]);
+
             return reply.code(201).send({
                 status: 'success',
                 data: inserted,
                 message: 'GST transaction created successfully'
             });
         } catch (error: any) {
+            if (error instanceof z.ZodError) {
+                return reply.code(400).send({
+                    status: 'error',
+                    message: 'Invalid transaction data',
+                    errors: error.errors
+                });
+            }
             return reply.code(400).send({
                 status: 'error',
                 message: error.message || "Failed to create GST transaction"
@@ -538,6 +589,209 @@ export default async function (fastify: FastifyInstance) {
             return reply.code(400).send({
                 status: 'error',
                 message: error.message || "Failed to import GST transactions"
+            });
+        }
+    });
+
+    // Validate GSTIN
+    fastify.post("/validate-gstin", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const { gstin } = req.body as { gstin: string };
+
+            // Validate GSTIN format
+            const isValid = GSTCalculator.validateGSTIN(gstin);
+            if (!isValid) {
+                return reply.code(400).send({
+                    status: 'error',
+                    message: 'Invalid GSTIN format',
+                    data: {
+                        isValid: false
+                    }
+                });
+            }
+
+            // Extract state from GSTIN
+            const state = GSTCalculator.getStateFromGSTIN(gstin);
+
+            // Mock registration data - in production, call GST portal API
+            const mockRegistrationData = {
+                isValid: true,
+                gstin: gstin.toUpperCase(),
+                businessName: `Business Name for ${gstin}`,
+                address: 'Street Address, City, State - PIN',
+                status: 'Active',
+                registrationDate: '2022-01-15',
+                state,
+                type: 'Regular',
+                aadhaarPan: gstin.substring(2, 12)
+            };
+
+            return reply.send({
+                status: 'success',
+                data: mockRegistrationData,
+                message: 'GSTIN validated successfully'
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: 'error',
+                message: error.message || "Failed to validate GSTIN"
+            });
+        }
+    });
+
+    // Get GST reconciliation data
+    fastify.get("/reconciliation/:period", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const { period } = req.params as { period: string };
+            const { companyId } = req.query as { companyId?: string };
+
+            const [year, month] = period.split('-');
+            const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+            const endDate = new Date(parseInt(year), parseInt(month), 0);
+
+            const whereConditions = [
+                gte(gstTransactions.date, startDate),
+                lte(gstTransactions.date, endDate)
+            ];
+
+            if (companyId) {
+                whereConditions.push(eq(gstTransactions.companyId, companyId));
+            }
+
+            // Get books data (from actual transactions)
+            const [salesBooks] = await db.select({
+                value: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.total} ELSE 0 END`),
+                tax: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.totalTax} ELSE 0 END`)
+            }).from(gstTransactions).where(and(...whereConditions));
+
+            const [purchaseBooks] = await db.select({
+                value: sum(sql`CASE WHEN ${gstTransactions.type} = 'purchase' THEN ${gstTransactions.total} ELSE 0 END`),
+                tax: sum(sql`CASE WHEN ${gstTransactions.type} = 'purchase' THEN ${gstTransactions.totalTax} ELSE 0 END`)
+            }).from(gstTransactions).where(and(...whereConditions));
+
+            // Mock returns data - in production, get from actual GSTR filings
+            const mockGSTR1 = {
+                value: (Number(salesBooks?.value) || 0) * 0.95, // Assuming 5% variance
+                tax: (Number(salesBooks?.tax) || 0) * 0.98
+            };
+
+            const mockGSTR2 = {
+                value: (Number(purchaseBooks?.value) || 0) * 0.92,
+                tax: (Number(purchaseBooks?.tax) || 0) * 0.95
+            };
+
+            const reconciliation = {
+                period,
+                books: {
+                    sales: Number(salesBooks?.value) || 0,
+                    salesTax: Number(salesBooks?.tax) || 0,
+                    purchases: Number(purchaseBooks?.value) || 0,
+                    purchasesTax: Number(purchaseBooks?.tax) || 0
+                },
+                returns: {
+                    gstr1Sales: mockGSTR1.value,
+                    gstr1SalesTax: mockGSTR1.tax,
+                    gstr2Purchases: mockGSTR2.value,
+                    gstr2PurchasesTax: mockGSTR2.tax
+                },
+                discrepancies: {
+                    salesVariance: Number(salesBooks?.value) || 0 - mockGSTR1.value,
+                    salesTaxVariance: (Number(salesBooks?.tax) || 0) - mockGSTR1.tax,
+                    purchasesVariance: (Number(purchaseBooks?.value) || 0) - mockGSTR2.value,
+                    purchasesTaxVariance: (Number(purchaseBooks?.tax) || 0) - mockGSTR2.tax
+                },
+                summary: {
+                    booksTotal: (Number(salesBooks?.value) || 0) + (Number(purchaseBooks?.value) || 0),
+                    returnsTotal: mockGSTR1.value + mockGSTR2.value,
+                    totalVariance: ((Number(salesBooks?.value) || 0) + (Number(purchaseBooks?.value) || 0)) - (mockGSTR1.value + mockGSTR2.value),
+                    status: 'reconciliation_pending' // Could be 'reconciled', 'discrepancy_found', etc.
+                }
+            };
+
+            return reply.send({
+                status: 'success',
+                data: reconciliation,
+                message: 'Reconciliation data retrieved successfully'
+            });
+        } catch (error: any) {
+            return reply.code(500).send({
+                status: 'error',
+                message: error.message || "Failed to fetch reconciliation data"
+            });
+        }
+    });
+
+    // Get GST reconciliation data
+    fastify.get("/summary", { preHandler: [fastify.authenticate] }, async (req, reply) => {
+        try {
+            const querySchema = z.object({
+                startDate: z.string().optional(),
+                endDate: z.string().optional(),
+                period: z.string().optional(),
+                companyId: z.string().optional()
+            });
+
+            const params = querySchema.parse(req.query);
+
+            // Determine date range
+            let startDate: Date;
+            let endDate: Date;
+
+            if (params.period) {
+                const [year, month] = params.period.split('-');
+                startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                endDate = new Date(parseInt(year), parseInt(month), 0);
+            } else {
+                startDate = params.startDate ? new Date(params.startDate) : new Date();
+                endDate = params.endDate ? new Date(params.endDate) : new Date();
+            }
+
+            const whereConditions = [
+                gte(gstTransactions.date, startDate),
+                lte(gstTransactions.date, endDate)
+            ];
+
+            if (params.companyId) {
+                whereConditions.push(eq(gstTransactions.companyId, params.companyId));
+            }
+
+            const [salesSummary] = await db.select({
+                totalSales: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.total} ELSE 0 END`),
+                totalTaxCollected: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.totalTax} ELSE 0 END`),
+                totalCGST: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.cgst} ELSE 0 END`),
+                totalSGST: sum(sql`CASE WHEN ${gstTransactions.type} = 'sale' THEN ${gstTransactions.sgst} ELSE 0 END`)
+            }).from(gstTransactions).where(and(...whereConditions));
+
+            const [purchaseSummary] = await db.select({
+                totalPurchases: sum(sql`CASE WHEN ${gstTransactions.type} = 'purchase' THEN ${gstTransactions.total} ELSE 0 END`),
+                totalTaxPaid: sum(sql`CASE WHEN ${gstTransactions.type} = 'purchase' THEN ${gstTransactions.totalTax} ELSE 0 END`)
+            }).from(gstTransactions).where(and(...whereConditions));
+
+            const totalTaxCollected = Number(salesSummary?.totalTaxCollected) || 0;
+            const totalTaxPaid = Number(purchaseSummary?.totalTaxPaid) || 0;
+            const netLiability = totalTaxCollected - totalTaxPaid;
+
+            return reply.send({
+                status: 'success',
+                data: {
+                    period: params.period || `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+                    totalSales: Number(salesSummary?.totalSales) || 0,
+                    totalPurchases: Number(purchaseSummary?.totalPurchases) || 0,
+                    totalTaxCollected,
+                    totalTaxPaid,
+                    netTaxLiability: netLiability,
+                    cgstLiability: Number(salesSummary?.totalCGST) || 0,
+                    sgstLiability: Number(salesSummary?.totalSGST) || 0,
+                    igstLiability: 0,
+                    cessLiability: 0,
+                    itcAvailable: totalTaxPaid,
+                    itcUtilized: Math.min(totalTaxPaid, totalTaxCollected)
+                }
+            });
+        } catch (error: any) {
+            return reply.code(500).send({
+                status: 'error',
+                message: error.message || "Failed to fetch GST summary"
             });
         }
     });
